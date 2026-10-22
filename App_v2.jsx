@@ -22,10 +22,8 @@ import {
   Croissant,
   CupSoda,
   Droplet,
-  Flame,
   IceCreamBowl,
   Info,
-  Languages,
   Layers,
   Loader2,
   MapPin,
@@ -58,7 +56,6 @@ import {
   orderBy,
   onSnapshot,
   runTransaction,
-  setDoc,
   updateDoc,
   getDocs,
   writeBatch,
@@ -98,7 +95,6 @@ const MODO_ADMIN = MODO === 'admin';
    COLECCIONES DE FIRESTORE
      · pedidos/{001, 002, …}   → un documento por pedido (número correlativo como ID)
      · config/contador         → { ultimo: n }        número del último pedido (transacción)
-     · config/demo             → { altaDemanda: bool } interruptor "Modo Alta Demanda" compartido
    ==================================================================== */
 
 /* ╔════════════════════════════════════════════════════════════════════╗
@@ -147,29 +143,29 @@ if (FIREBASE_CONFIGURADO) {
 // Para probar un producto agotado, pon su stock_disponible a 0 en este CSV.
 const CATALOGO_CSV = `id,nombre,precio,categoria,imagen_url,stock_disponible
 1,Agua Sin Gas 50cl,1.75,Aguas,lucide:droplet,180
-2,Bocadillo Pollo Gourmet,5.72,Bocadillos,lucide:sandwich,45
+2,Bocadillo Pollo Gourmet,5.72,Bocadillos,lucide:sandwich,8
 3,Café Cortado,1.9,Cafés,lucide:coffee,250
-4,Sándwich Mixto,5.7,Sandwiches,lucide:layers,40
-5,Bocadillo Jamón Serrano y Queso,5.76,Bocadillos,lucide:sandwich,45
+4,Sándwich Mixto,5.7,Sandwiches,lucide:layers,10
+5,Bocadillo Jamón Serrano y Queso,5.76,Bocadillos,lucide:sandwich,6
 6,Oferta Bollería + Bebida Caliente,4.2,Ofertas,lucide:sparkles,60
 7,Café Solo,1.9,Cafés,lucide:coffee,250
 8,Cerveza Dorada,2.77,Cervezas,lucide:beer,120
-9,Sándwich Atún,5.73,Sandwiches,lucide:layers,35
-10,Bocadillo Tortilla,5.77,Bocadillos,lucide:sandwich,35
-11,Bocadillo Chorizo de Teror y Queso Ahumado,5.95,Bocadillos,lucide:sandwich,30
-12,Bocadillo Pata Asada y Queso Tierno,5.95,Bocadillos,lucide:sandwich,30
-13,Bocadillo Vegetal con Atún,5.75,Bocadillos,lucide:sandwich,25
-14,Sándwich Pollo César,5.8,Sandwiches,lucide:layers,30
-15,Sándwich Vegetal,5.5,Sandwiches,lucide:layers,25
+9,Sándwich Atún,5.73,Sandwiches,lucide:layers,8
+10,Bocadillo Tortilla,5.77,Bocadillos,lucide:sandwich,7
+11,Bocadillo Chorizo de Teror y Queso Ahumado,5.95,Bocadillos,lucide:sandwich,6
+12,Bocadillo Pata Asada y Queso Tierno,5.95,Bocadillos,lucide:sandwich,5
+13,Bocadillo Vegetal con Atún,5.75,Bocadillos,lucide:sandwich,4
+14,Sándwich Pollo César,5.8,Sandwiches,lucide:layers,7
+15,Sándwich Vegetal,5.5,Sandwiches,lucide:layers,5
 16,Café con Leche,2.1,Cafés,lucide:coffee,250
 17,Café Leche y Leche,2.2,Cafés,lucide:coffee,200
 18,Barraquito / Zaperoco,2.6,Cafés,lucide:coffee,120
 19,Infusión / Té Variado,1.9,Cafés,lucide:cup-soda,150
-20,Croissant de Mantequilla,2.3,Croissants,lucide:croissant,45
-21,Croissant Mixto Jamón y Queso,3.8,Croissants,lucide:croissant,30
-22,Napolitana de Chocolate,2.5,Bolleria,lucide:cookie,40
-23,Muffin Artesano de Arándanos,2.8,Bolleria,lucide:cake-slice,30
-24,Donut Glaseado,2.2,Bolleria,lucide:circle-dot,35
+20,Croissant de Mantequilla,2.3,Croissants,lucide:croissant,12
+21,Croissant Mixto Jamón y Queso,3.8,Croissants,lucide:croissant,10
+22,Napolitana de Chocolate,2.5,Bolleria,lucide:cookie,12
+23,Muffin Artesano de Arándanos,2.8,Bolleria,lucide:cake-slice,10
+24,Donut Glaseado,2.2,Bolleria,lucide:circle-dot,12
 25,Agua Con Gas 50cl,1.9,Aguas,lucide:droplet,80
 26,Coca-Cola Original 33cl,2.6,Refrescos Cola,lucide:cup-soda,110
 27,Coca-Cola Zero 33cl,2.6,Refrescos Cola,lucide:cup-soda,110
@@ -181,7 +177,7 @@ const CATALOGO_CSV = `id,nombre,precio,categoria,imagen_url,stock_disponible
 33,Papas Fritas Munchitos,1.95,Snacks,lucide:package,80
 34,Ambrosía Tirma,1.5,Snacks,lucide:candy,100
 35,Papas Fritas Lay's al Punto de Sal,2.2,Snacks,lucide:package,70
-36,Yogur Artesano Canario con Gofio,2.5,Snacks,lucide:ice-cream-bowl,25
+36,Yogur Artesano Canario con Gofio,2.5,Snacks,lucide:ice-cream-bowl,12
 37,Fruta Fresca Km 0 (Plátano de Canarias / Manzana),1.6,Snacks,lucide:apple,50
 38,Oferta Bocadillo + Refresco o Cerveza,7.8,Ofertas,lucide:sparkles,50
 39,Oferta Sándwich + Agua o Refresco,7.5,Ofertas,lucide:sparkles,50
@@ -227,7 +223,22 @@ function cargarCatalogo(csv) {
   }));
 }
 
-const PRODUCTOS_INICIALES = cargarCatalogo(CATALOGO_CSV);
+// Caducidad simulada para la demo (horas de vida desde que se abre la app).
+// Los productos perecederos duran poco; el resto se queda en una semana.
+const CADUCIDAD_MOCK_HORAS = {
+  2: 3, 4: 2, 5: 4, 6: 5, 9: 3, 10: 5, 11: 2, 12: 6, 13: 4, 14: 3, 15: 5,
+  20: 4, 21: 3, 22: 2, 23: 5, 24: 6, 36: 1, 37: 7, 38: 3, 39: 4, 40: 6,
+};
+const HORAS_CADUCIDAD_POR_DEFECTO = 168;
+const conCaducidadMock = (productos) => {
+  const ahora = Date.now();
+  return productos.map((p) => ({
+    ...p,
+    caduca: ahora + (CADUCIDAD_MOCK_HORAS[p.id] ?? HORAS_CADUCIDAD_POR_DEFECTO) * 60 * 60 * 1000,
+  }));
+};
+
+const PRODUCTOS_INICIALES = conCaducidadMock(cargarCatalogo(CATALOGO_CSV));
 
 // Traducción de los 40 productos del catálogo (la clave es el id del CSV).
 const NOMBRES_EN = {
@@ -366,11 +377,10 @@ const INFO_ESTADO = {
 };
 
 /* Reglas de negocio ------------------------------------------------- */
-// Modelo determinista de colas: espera = (pedidos en cola × MIN_POR_PEDIDO + BASE_RECOGIDA_MIN) × factor
-const MIN_POR_PEDIDO = 2.5; // tiempo medio de preparación de cada pedido (min)
+// Modelo determinista de colas: espera = pedidos en cola × MIN_POR_PEDIDO + BASE_RECOGIDA_MIN
+// Escalado a la demo de 25 pasajeros: 5 pedidos ≈ 5 min, 10 ≈ 7 min, 25 ≈ 15 min (nivel alto).
+const MIN_POR_PEDIDO = 0.5; // incremento de espera por pedido concurrente (min)
 const BASE_RECOGIDA_MIN = 2; // trayecto + recogida (min), constante
-// Modo Alta Demanda: multiplica el tiempo total de TODAS las cafeterías.
-const FACTOR_SOBRECARGA = 1.5;
 const REFRESCO_ESPERAS_MS = 60 * 1000; // las esperas se recalculan y refrescan cada 60 s
 
 // Fred. Olsen Plus: no hay descuentos en comida, se acumulan puntos según el gasto.
@@ -456,7 +466,6 @@ const TEXTOS_EN = {
   'Hemos ajustado tu carrito: otro pasajero se ha llevado las últimas unidades de algún artículo.': 'We adjusted your cart: another passenger took the last units of an item.',
   'No se ha podido actualizar el pedido {num}. Inténtalo de nuevo.': 'Could not update order {num}. Please try again.',
   'No se han podido sumar los puntos Plus. Inténtalo de nuevo.': 'Could not add Plus points. Please try again.',
-  'No se ha podido cambiar el Modo Alta Demanda.': 'Could not change High Demand Mode.',
   'No se ha podido reiniciar la demo. Comprueba tu conexión.': 'Could not reset the demo. Check your connection.',
   'Pulsa de nuevo para borrar los pedidos de TODOS los dispositivos.': 'Press again to delete orders from ALL devices.',
   'No se ha podido enviar el pedido. Inténtalo de nuevo.': 'Could not send the order. Please try again.',
@@ -469,8 +478,6 @@ const TEXTOS_EN = {
   /* Catálogo y carrito */
   'Pide desde donde estés': 'Order from wherever you are',
   'Elige, paga y recoge en la cafetería que prefieras. Sin colas y sin moverte hasta que esté listo.': 'Choose, pay and collect at your favourite café. No queues, no waiting.',
-  'Alta demanda en cafeterías:': 'High demand at cafés:',
-  'Los tiempos de espera son superiores a lo habitual.': 'Waiting times are longer than usual.',
   'Prototipo · catálogo cargado desde CSV · pagos simulados · {modo}': 'Prototype · catalogue loaded from CSV · simulated payments · {modo}',
   'pedidos sincronizados con Firebase': 'orders synced with Firebase',
   'modo local (sin Firebase)': 'local mode (no Firebase)',
@@ -524,7 +531,6 @@ const TEXTOS_EN = {
   'Continuar al pago': 'Continue to payment',
   '¿Dónde recoges tu pedido?': 'Where will you collect your order?',
   'Toca la cafetería del plano donde quieres recogerlo. Los tiempos dependen de los pedidos que hay en cola.': 'Tap the café on the map where you want to collect it. Times depend on the orders in the queue.',
-  'Alta demanda: los tiempos de espera se multiplican por {factor}.': 'High demand: waiting times are multiplied by {factor}.',
   'Tiempo de espera': 'Waiting time',
   'Leyenda de tiempos de espera': 'Waiting time legend',
   'Baja': 'Low',
@@ -604,10 +610,19 @@ const TEXTOS_EN = {
   /* Tripulación */
   'Panel de tripulación': 'Crew panel',
   'Tripulación': 'Crew',
-  'Modo Alta Demanda': 'High Demand Mode',
-  'Activo': 'Active',
-  'Inactivo': 'Inactive',
-  'MODO ALTA DEMANDA ACTIVO · Prioriza los pedidos más antiguos': 'HIGH DEMAND MODE ACTIVE · Prioritise the oldest orders',
+  'Stock': 'Stock',
+  'Stock y caducidad': 'Stock and expiry',
+  'Inventario mock de la demo': 'Demo mock inventory',
+  'Los productos con caducidad próxima suben en las recomendaciones del cliente, sin mencionarlo en el mensaje.': 'Products nearing expiry are prioritised in customer recommendations, without mentioning it in the message.',
+  'Caducidad simulada': 'Simulated expiry',
+  'Caduca en {n} h': 'Expires in {n} h',
+  'Caduca en {n} días': 'Expires in {n} days',
+  'Caducado': 'Expired',
+  'Se recomendará antes': 'Will be recommended first',
+  'Sin stock': 'Out of stock',
+  '{n} uds.': '{n} units',
+  'Los agotados desaparecen de las recomendaciones y muestran «Agotado» en el catálogo.': 'Sold-out items disappear from recommendations and show "Sold out" in the catalogue.',
+  'Si otro pasajero se lleva las últimas unidades, el carrito se ajusta automáticamente.': 'If another passenger takes the last units, the cart adjusts automatically.',
   'Sin pedidos en preparación. Haz un pedido en la App Pasajero y aparecerá aquí.': 'No orders preparing. Place an order in the Passenger App and it will appear here.',
   'Sin pedidos listos': 'No ready orders',
   'Reiniciar demo': 'Reset demo',
@@ -680,11 +695,9 @@ const redondear = (n) => Math.round(n * 100) / 100;
 // suma carga. Al entregarlo deja de contar, igual que ocurre en una cola real.
 const pedidosEnColaDe = (ubId, pedidos) =>
   pedidos.filter((p) => p.ubicacionId === ubId && p.estado !== 'entregado').length;
-// Espera (min) = (pedidos × 2,5 + 2) × (1,5 si hay Alta Demanda). Se redondea hacia arriba a minutos
-// enteros para no prometer nunca menos tiempo del real; el color del chip usa ese mismo valor.
-const calcularEspera = (pedidos, altaDemanda = false) =>
-  Math.ceil((pedidos * MIN_POR_PEDIDO + BASE_RECOGIDA_MIN) * (altaDemanda ? FACTOR_SOBRECARGA : 1));
-const esperaDe = (ub, pedidos, altaDemanda = false) => calcularEspera(pedidosEnColaDe(ub.id, pedidos), altaDemanda);
+// Se redondea hacia arriba para no prometer nunca menos tiempo del real; el color del chip usa ese mismo valor.
+const calcularEspera = (pedidos) => Math.ceil(pedidos * MIN_POR_PEDIDO + BASE_RECOGIDA_MIN);
+const esperaDe = (ub, pedidos) => calcularEspera(pedidosEnColaDe(ub.id, pedidos));
 // Hook: fuerza el recálculo de las esperas en pantalla exactamente cada 60 s (y devuelve la hora de la última actualización)
 function useRefrescoEsperas(ms = REFRESCO_ESPERAS_MS) {
   const [refresco, setRefresco] = useState(() => ({ tick: 0, hora: Date.now() }));
@@ -713,6 +726,18 @@ const momentoDelDia = (hora) => {
   if (hora < 19) return 'tarde';
   if (hora < 24) return 'noche';
   return 'madrugada';
+};
+
+const horasHastaCaducar = (producto, ahora = Date.now()) => (producto.caduca - ahora) / (60 * 60 * 1000);
+// La caducidad solo desempata/prioriza entre productos que ya encajan con el carrito.
+const prioridadCaducidad = (producto, ahora = Date.now()) => {
+  const horas = horasHastaCaducar(producto, ahora);
+  if (!Number.isFinite(horas) || horas <= 0) return 0;
+  if (horas <= 2) return 180;
+  if (horas <= 4) return 140;
+  if (horas <= 8) return 90;
+  if (horas <= 24) return 40;
+  return 0;
 };
 
 function resumenRecomendaciones(lineas, ahora = Date.now()) {
@@ -791,9 +816,9 @@ function recomendarProductos({ lineas, productos, ahora = Date.now() }) {
       });
   });
 
-  const ordenados = [...puntos.values()].sort(
-    (a, b) => b.puntos - a.puntos || b.producto.stock_disponible - a.producto.stock_disponible
-  );
+  const ordenados = [...puntos.values()]
+    .map((x) => ({ ...x, puntos: x.puntos + prioridadCaducidad(x.producto, ahora) }))
+    .sort((a, b) => b.puntos - a.puntos || b.producto.stock_disponible - a.producto.stock_disponible);
   const elegidos = [];
   ordenados.forEach((c) => {
     if (elegidos.length < 3 && !elegidos.some((e) => e.producto.categoria === c.producto.categoria)) elegidos.push(c);
@@ -806,13 +831,13 @@ function recomendarProductos({ lineas, productos, ahora = Date.now() }) {
 
 /* -------------------------------------------------------------------
    3. DATOS EN TIEMPO REAL (Firestore) + ESTADO GLOBAL
-      · `pedidos` y el "Modo Alta Demanda" viven en Firestore y llegan por onSnapshot
+      · `pedidos` vive en Firestore y llega por onSnapshot
         → cualquier dispositivo (pasajero, tripulación, métricas…) ve los cambios al instante.
       · El carrito es local de cada dispositivo.
       · Sin credenciales (modo local) la misma capa funciona en memoria.
    ------------------------------------------------------------------- */
 const COL_PEDIDOS = 'pedidos';
-const COL_CONFIG = 'config'; // config/contador → { ultimo } · config/demo → { altaDemanda }
+const COL_CONFIG = 'config'; // config/contador → { ultimo }
 const TIMEOUT_CONEXION_MS = 8000; // si Firestore no responde en 8 s se avisa de "sin conexión"
 const AVISO_MS = 6000;
 
@@ -872,7 +897,6 @@ function obtenerClienteId() {
 function crearBackendFirestore(firestore) {
   const refPedido = (numero) => doc(firestore, COL_PEDIDOS, idPedido(numero));
   const refContador = doc(firestore, COL_CONFIG, 'contador');
-  const refDemo = doc(firestore, COL_CONFIG, 'demo');
   return {
     modo: 'firebase',
 
@@ -890,10 +914,6 @@ function crearBackendFirestore(firestore) {
         },
         onError
       );
-    },
-
-    suscribirConfig(onDatos, onError) {
-      return onSnapshot(refDemo, (snap) => onDatos({ altaDemanda: snap.exists() && snap.data().altaDemanda === true }), onError);
     },
 
     // CONFIRMAR_PEDIDO → setDoc con ID propio (001, 002…) dentro de una transacción:
@@ -923,9 +943,6 @@ function crearBackendFirestore(firestore) {
     sumarPuntos(numero, puntosPlus) {
       return updateDoc(refPedido(numero), { puntosPlus });
     },
-    fijarAltaDemanda(valor) {
-      return setDoc(refDemo, { altaDemanda: valor }, { merge: true });
-    },
     // Borra todos los pedidos (para TODOS los dispositivos) y reinicia el contador
     async reiniciar() {
       const todos = await getDocs(collection(firestore, COL_PEDIDOS));
@@ -936,7 +953,6 @@ function crearBackendFirestore(firestore) {
       }
       const fin = writeBatch(firestore);
       fin.set(refContador, { ultimo: 0 });
-      fin.set(refDemo, { altaDemanda: false });
       await fin.commit();
     },
   };
@@ -946,12 +962,9 @@ function crearBackendFirestore(firestore) {
 function crearBackendLocal() {
   let pedidos = [];
   let ultimo = 0;
-  let altaDemanda = false;
   const oyentesPedidos = new Set();
-  const oyentesConfig = new Set();
   const emitirPedidos = (cambios = []) =>
     oyentesPedidos.forEach((f) => f({ pedidos: pedidos.map((p) => ({ ...p })), cambios, desdeCache: false }));
-  const emitirConfig = () => oyentesConfig.forEach((f) => f({ altaDemanda }));
   const modificar = (numero, cambio) => {
     const actual = pedidos.find((p) => p.numero === numero);
     if (!actual) return;
@@ -966,11 +979,6 @@ function crearBackendLocal() {
       onDatos({ pedidos: pedidos.map((p) => ({ ...p })), cambios: [], desdeCache: false });
       return () => oyentesPedidos.delete(onDatos);
     },
-    suscribirConfig(onDatos) {
-      oyentesConfig.add(onDatos);
-      onDatos({ altaDemanda });
-      return () => oyentesConfig.delete(onDatos);
-    },
     async crearPedido({ items, total, ubicacionId, metodoPago, clienteId }) {
       ultimo += 1;
       const pedido = { numero: ultimo, items, total, ubicacionId, metodoPago, clienteId, estado: ESTADO_INICIAL_PEDIDO, creado: Date.now(), puntosPlus: null };
@@ -984,16 +992,10 @@ function crearBackendLocal() {
     async sumarPuntos(numero, puntosPlus) {
       modificar(numero, { puntosPlus });
     },
-    async fijarAltaDemanda(valor) {
-      altaDemanda = valor;
-      emitirConfig();
-    },
     async reiniciar() {
       pedidos = [];
       ultimo = 0;
-      altaDemanda = false;
       emitirPedidos();
-      emitirConfig();
     },
   };
 }
@@ -1015,7 +1017,6 @@ const estadoInicial = () => ({
   ubicaciones: UBICACIONES_INICIALES,
   carrito: {}, // { [idProducto]: cantidad } · local de cada dispositivo
   pedidos: [], // ← sincronizado con la colección `pedidos` de Firestore
-  altaDemanda: false, // ← sincronizado con config/demo
   notificaciones: [], // avisos al pasajero cuando la tripulación marca SU pedido como listo
   aviso: null, // aviso global { texto, tono }
   cargado: !FIREBASE_CONFIGURADO, // ¿ha llegado ya la primera lectura de Firestore? (en modo local no hay nada que esperar)
@@ -1067,8 +1068,6 @@ function reducer(state, action) {
       }
       return { ...state, pedidos: action.pedidos, productos, carrito, aviso, cargado: action.cargado === undefined ? state.cargado : action.cargado };
     }
-    case 'SET_ALTA_DEMANDA':
-      return { ...state, altaDemanda: action.valor };
     case 'SET_CONEXION':
       return { ...state, conexion: action.conexion, errorConexion: action.error === undefined ? state.errorConexion : action.error };
     case 'NOTIFICAR':
@@ -1086,7 +1085,7 @@ function reducer(state, action) {
 
 /* Proveedor: conecta con Firestore (o con el backend local) y expone `dispatch`.
    `dispatch` acepta las acciones del reducer Y las acciones con efectos —CONFIRMAR_PEDIDO, AVANZAR_PEDIDO,
-   SUMAR_PUNTOS_PLUS, ALTA_DEMANDA, REINICIAR—, que escriben en Firestore y devuelven una Promise. */
+   SUMAR_PUNTOS_PLUS, REINICIAR—, que escriben en Firestore y devuelven una Promise. */
 function StoreProvider({ children }) {
   const [state, dispatch0] = useReducer(reducer, undefined, estadoInicial);
   const stateRef = useRef(state); // lectura del estado más reciente dentro de callbacks asíncronos
@@ -1169,7 +1168,6 @@ function StoreProvider({ children }) {
           emitir({ type: 'SET_CONEXION', conexion: 'error', error: mensajeErrorConexion(err) });
         }
       ),
-      backend.suscribirConfig((datos) => emitir({ type: 'SET_ALTA_DEMANDA', valor: datos.altaDemanda }), () => {}),
     ];
     return () => {
       vivo = false;
@@ -1263,15 +1261,6 @@ function StoreProvider({ children }) {
       }
     },
 
-    // ALTA_DEMANDA: interruptor compartido por todos los dispositivos
-    async alternarAltaDemanda() {
-      try {
-        await backend.fijarAltaDemanda(!stateRef.current.altaDemanda);
-      } catch (e) {
-        dispatch0({ type: 'AVISAR', aviso: { clave: 'No se ha podido cambiar el Modo Alta Demanda.', tono: 'error' } });
-      }
-    },
-
     // REINICIAR: borra los pedidos (en todos los dispositivos) y deja la demo a cero
     async reiniciarDemo() {
       try {
@@ -1299,8 +1288,6 @@ function StoreProvider({ children }) {
         return a.avanzarPedido(accion);
       case 'SUMAR_PUNTOS_PLUS':
         return a.sumarPuntosPlus(accion);
-      case 'ALTA_DEMANDA':
-        return a.alternarAltaDemanda();
       case 'REINICIAR':
         return a.reiniciarDemo();
       default:
@@ -1926,7 +1913,7 @@ function BloquePuntosPlus({ pedido }) {
 function AppPasajero({ visible, demo = false }) {
   const { state, dispatch, clienteId, modo } = useStore();
   const { t, eur, idioma, locale } = useI18n();
-  const { productos, ubicaciones, carrito, pedidos, notificaciones, altaDemanda } = state;
+  const { productos, ubicaciones, carrito, pedidos, notificaciones } = state;
 
   const [fase, setFase] = useState('catalogo'); // catalogo | carrito | mapa | pago | confirmado
   const [ubicacionId, setUbicacionId] = useState(null);
@@ -1965,12 +1952,12 @@ function AppPasajero({ visible, demo = false }) {
   );
   const totalItems = lineas.reduce((s, l) => s + l.cantidad, 0);
   const total = redondear(lineas.reduce((s, l) => s + l.cantidad * l.precio, 0));
-  // Esperas por cafetería (modelo de colas). Se recalculan al cambiar los pedidos / la alta demanda y, además,
-  // a la fuerza cada 60 s con el temporizador de useRefrescoEsperas.
+  // Esperas por cafetería (modelo de colas). Se recalculan al cambiar los pedidos y,
+  // a la fuerza, cada 60 s con el temporizador de useRefrescoEsperas.
   const refresco = useRefrescoEsperas();
   const esperas = useMemo(
-    () => Object.fromEntries(ubicaciones.map((u) => [u.id, esperaDe(u, pedidos, altaDemanda)])),
-    [ubicaciones, pedidos, altaDemanda, refresco.tick]
+    () => Object.fromEntries(ubicaciones.map((u) => [u.id, esperaDe(u, pedidos)])),
+    [ubicaciones, pedidos, refresco.tick]
   );
   // Recomendaciones locales para el carrito: carrito + hora + stock + categorías.
   const recomendaciones = useMemo(
@@ -2128,20 +2115,6 @@ function AppPasajero({ visible, demo = false }) {
             </div>
           </div>
         </header>
-
-        {/* Aviso de Alta Demanda (lo activa la tripulación): primera cosa que ve el pasajero en el catálogo */}
-        {altaDemanda && fase === 'catalogo' ? (
-          <div
-            role="alert"
-            aria-label={t('Alta demanda en cafeterías:')}
-            className="fo-toast-in flex shrink-0 items-start gap-2.5 bg-fo-red px-4 py-3 text-white shadow-md"
-          >
-            <TriangleAlert size={20} className="mt-px shrink-0 text-fo-yellow" />
-            <p className="text-[13px] font-semibold leading-snug">
-              <span className="font-bold">{t('Alta demanda en cafeterías:')}</span> {t('Los tiempos de espera son superiores a lo habitual.')}
-            </p>
-          </div>
-        ) : null}
 
         {/* Catálogo */}
         <div ref={scrollRef} onScroll={alHacerScroll} className="relative flex-1 overflow-y-auto pb-28">
@@ -2387,12 +2360,6 @@ function AppPasajero({ visible, demo = false }) {
                 <p className="mt-3 text-sm font-light text-fo-grey">
                   {t('Toca la cafetería del plano donde quieres recogerlo. Los tiempos dependen de los pedidos que hay en cola.')}
                 </p>
-                {altaDemanda ? (
-                  <p className="mt-3 flex items-start gap-1.5 rounded-lg bg-fo-cream p-2.5 text-[13px] font-semibold text-fo-blue" data-aviso="alta-demanda-mapa">
-                    <TriangleAlert size={16} className="mt-px shrink-0 text-fo-red" />
-                    {t('Alta demanda: los tiempos de espera se multiplican por {factor}.', { factor: FACTOR_SOBRECARGA.toLocaleString(locale) })}
-                  </p>
-                ) : null}
               </div>
 
               <div className="rounded-card border border-fo-line bg-white p-3">
@@ -2739,23 +2706,99 @@ function TarjetaPedido({ pedido, ubicacion, columna, ahora, onAvanzar }) {
   );
 }
 
+const textoCaducidad = (p, ahora, t) => {
+  const horas = horasHastaCaducar(p, ahora);
+  if (horas <= 0) return t('Caducado');
+  if (horas < 24) return t('Caduca en {n} h', { n: Math.max(1, Math.ceil(horas)) });
+  return t('Caduca en {n} días', { n: Math.ceil(horas / 24) });
+};
+
+function HojaStock({ productos, ahora, onClose }) {
+  const { t, idioma } = useI18n();
+  const ordenados = [...productos].sort(
+    (a, b) => a.caduca - b.caduca || a.stock_disponible - b.stock_disponible
+  );
+  return (
+    <HojaInferior
+      titulo={t('Stock y caducidad')}
+      subtitulo={t('Inventario mock de la demo')}
+      icono={Package}
+      onClose={onClose}
+    >
+      <div className="space-y-3 pb-2">
+        <div className="rounded-card border border-fo-line bg-fo-cream p-3 text-[13px] leading-snug text-fo-blue">
+          <p>
+            <b>{t('Caducidad simulada')}</b> · {t('Los productos con caducidad próxima suben en las recomendaciones del cliente, sin mencionarlo en el mensaje.')}
+          </p>
+          <p className="mt-1.5 text-fo-grey">
+            {t('Los agotados desaparecen de las recomendaciones y muestran «Agotado» en el catálogo.')}{' '}
+            {t('Si otro pasajero se lleva las últimas unidades, el carrito se ajusta automáticamente.')}
+          </p>
+        </div>
+
+        <ul className="space-y-2" data-lista="stock">
+          {ordenados.map((p) => {
+            const horas = horasHastaCaducar(p, ahora);
+            const agotado = p.stock_disponible <= 0;
+            const urgente = horas > 0 && horas <= 2;
+            const pronto = horas > 2 && horas <= 8;
+            const prioridad = !agotado && horas > 0 && horas <= 8;
+            return (
+              <li
+                key={p.id}
+                data-stock={p.id}
+                data-caducidad={horas <= 0 ? 'caducado' : urgente ? 'urgente' : pronto ? 'pronto' : 'normal'}
+                className={`rounded-card border bg-white p-3 ${
+                  urgente ? 'border-fo-red/50' : pronto ? 'border-fo-yellow' : 'border-fo-line'
+                } ${agotado ? 'opacity-60' : ''}`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#F7F7F7] text-fo-blue">
+                    <ImagenProducto producto={p} size={19} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-fo-blue">{nombreProducto(p, idioma)}</p>
+                    <p className="text-[12px] text-fo-grey">
+                      {nombreCategoria(p.categoria, idioma)} · {t('{n} uds.', { n: p.stock_disponible })}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 flex-col items-end gap-1">
+                    <Pill tone={agotado ? 'grey' : horas <= 0 || urgente ? 'red' : pronto ? 'cream' : 'blue'}>
+                      {agotado ? t('Sin stock') : textoCaducidad(p, ahora, t)}
+                    </Pill>
+                    {prioridad ? (
+                      <span className="text-[10px] font-bold uppercase tracking-wide text-fo-blue">{t('Se recomendará antes')}</span>
+                    ) : null}
+                  </div>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </HojaInferior>
+  );
+}
+
 function PanelTripulacion() {
   const { state, dispatch } = useStore();
   const { t, idioma } = useI18n();
-  const { pedidos, ubicaciones, altaDemanda } = state;
+  const { pedidos, ubicaciones, productos } = state;
   const [filtro, setFiltro] = useState('todas');
+  const [verStock, setVerStock] = useState(false);
   const ahora = useAhora(15000);
   useRefrescoEsperas(); // re-renderiza cada 60 s: los chips de espera de la cabecera se recalculan con el modelo de colas
 
   const activos = pedidos.filter((p) => p.estado !== 'entregado');
   const entregados = pedidos.length - activos.length;
+  const alertasStock = productos.filter((p) => p.stock_disponible <= 5).length;
   const visibles = activos
     .filter((p) => filtro === 'todas' || p.ubicacionId === filtro)
     .sort((a, b) => a.creado - b.creado);
 
   return (
-    <div className={`relative flex h-full flex-col transition-colors duration-300 ${altaDemanda ? 'bg-[#FCEBEA]' : 'bg-fo-ice'}`}>
-      <header className={`shrink-0 text-white transition-colors duration-300 ${altaDemanda ? 'bg-fo-red' : 'bg-fo-blue'}`}>
+    <div className="relative flex h-full flex-col bg-fo-ice">
+      <header className="shrink-0 bg-fo-blue text-white">
         <div className="flex flex-wrap items-center gap-x-6 gap-y-3 px-5 py-3">
           <div>
             <p className="text-[11px] uppercase tracking-wider text-white/70">{t('Tripulación')}</p>
@@ -2770,7 +2813,7 @@ function PanelTripulacion() {
                 className="flex items-center gap-2 rounded-full bg-white/10 py-1 pl-3 pr-1 text-xs font-semibold"
               >
                 {cortoUbicacion(u, idioma)}
-                <ChipEspera min={esperaDe(u, pedidos, altaDemanda)} tam="sm" />
+                <ChipEspera min={esperaDe(u, pedidos)} tam="sm" />
               </span>
             ))}
           </div>
@@ -2782,30 +2825,24 @@ function PanelTripulacion() {
             </div>
             <div className="flex items-center gap-1">
               <ChipConexion />
+              <button
+                type="button"
+                onClick={() => setVerStock(true)}
+                title={t('Stock y caducidad')}
+                data-btn="stock"
+                className="relative flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-2 text-sm font-bold text-white transition hover:bg-white/20"
+              >
+                <Package size={18} /> {t('Stock')}
+                {alertasStock > 0 ? (
+                  <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-fo-yellow px-1 text-[11px] font-bold text-fo-blue">
+                    {alertasStock}
+                  </span>
+                ) : null}
+              </button>
               <BotonReiniciar />
             </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={altaDemanda}
-              onClick={() => dispatch({ type: 'ALTA_DEMANDA' })}
-              className="flex items-center gap-3 rounded-full border-2 border-white/40 bg-white/10 px-4 py-2 text-sm font-bold transition hover:bg-white/20"
-            >
-              <Flame size={18} className={altaDemanda ? 'text-fo-yellow' : ''} />
-              {t('Modo Alta Demanda')}
-              <span className={`relative h-6 w-11 rounded-full transition-colors ${altaDemanda ? 'bg-fo-yellow' : 'bg-white/30'}`}>
-                <span className={`absolute top-0.5 h-5 w-5 rounded-full transition-all ${altaDemanda ? 'left-[22px] bg-fo-blue' : 'left-0.5 bg-white'}`} />
-              </span>
-              <span className="w-14 text-left text-[11px] uppercase">{altaDemanda ? t('Activo') : t('Inactivo')}</span>
-            </button>
           </div>
         </div>
-        {altaDemanda ? (
-          <div className="flex items-center justify-center gap-2 bg-fo-yellow px-4 py-1.5 text-sm font-bold text-fo-blue">
-            <TriangleAlert size={16} className="fo-blink" />
-            {t('MODO ALTA DEMANDA ACTIVO · Prioriza los pedidos más antiguos')}
-          </div>
-        ) : null}
       </header>
       <BandaConexion />
 
@@ -2826,7 +2863,7 @@ function PanelTripulacion() {
         ))}
       </div>
 
-      <div className={`grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto p-5 md:grid-cols-2 md:overflow-hidden ${altaDemanda ? 'md:ring-4 md:ring-inset md:ring-fo-red/30' : ''}`}>
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto p-5 md:grid-cols-2 md:overflow-hidden">
         {COLUMNAS.map((col) => {
           const pedidosCol = visibles.filter((p) => p.estado === col.estado);
           const Ico = col.icono;
@@ -2863,6 +2900,8 @@ function PanelTripulacion() {
           );
         })}
       </div>
+
+      {verStock ? <HojaStock productos={productos} ahora={ahora} onClose={() => setVerStock(false)} /> : null}
 
       <PantallaCarga />
     </div>
