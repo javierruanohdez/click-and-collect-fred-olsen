@@ -366,8 +366,8 @@ const INFO_ESTADO = {
 };
 
 /* Reglas de negocio ------------------------------------------------- */
-// Modelo determinista de colas: espera = (artículos en cola × MIN_POR_ARTICULO + BASE_RECOGIDA_MIN) × factor
-const MIN_POR_ARTICULO = 1.5; // tiempo de preparación de cada artículo (min)
+// Modelo determinista de colas: espera = (pedidos en cola × MIN_POR_PEDIDO + BASE_RECOGIDA_MIN) × factor
+const MIN_POR_PEDIDO = 2.5; // tiempo medio de preparación de cada pedido (min)
 const BASE_RECOGIDA_MIN = 2; // trayecto + recogida (min), constante
 // Modo Alta Demanda: multiplica el tiempo total de TODAS las cafeterías.
 const FACTOR_SOBRECARGA = 1.5;
@@ -523,7 +523,7 @@ const TEXTOS_EN = {
   'Toca una cafetería en el plano para continuar': 'Tap a café on the map to continue',
   'Continuar al pago': 'Continue to payment',
   '¿Dónde recoges tu pedido?': 'Where will you collect your order?',
-  'Toca la cafetería del plano donde quieres recogerlo. Los tiempos dependen de los artículos que hay en cola.': 'Tap the café on the map where you want to collect it. Times depend on the items in the queue.',
+  'Toca la cafetería del plano donde quieres recogerlo. Los tiempos dependen de los pedidos que hay en cola.': 'Tap the café on the map where you want to collect it. Times depend on the orders in the queue.',
   'Alta demanda: los tiempos de espera se multiplican por {factor}.': 'High demand: waiting times are multiplied by {factor}.',
   'Tiempo de espera': 'Waiting time',
   'Leyenda de tiempos de espera': 'Waiting time legend',
@@ -613,7 +613,7 @@ const TEXTOS_EN = {
   'Reiniciar demo': 'Reset demo',
   '¿Seguro?': 'Sure?',
   'Reiniciar demo (borra los pedidos de todos los dispositivos)': 'Reset demo (deletes orders from all devices)',
-  '{n} artículos en cola': '{n} items in queue',
+  '{n} pedidos en cola': '{n} orders in queue',
   'En Preparación': 'Preparing',
   'Listos para Recoger': 'Ready for Pickup',
   'Marcar como listo': 'Mark as ready',
@@ -676,17 +676,15 @@ function I18nProvider({ children }) {
   return <I18nCtx.Provider value={value}>{children}</I18nCtx.Provider>;
 }
 const redondear = (n) => Math.round(n * 100) / 100;
-// Artículos (unidades, no pedidos) pendientes de preparar en una cafetería: SOLO pedidos en 'preparando'
-// ('listo' y 'entregado' ya no ocupan a la cocina).
-const articulosEnColaDe = (ubId, pedidos) =>
-  pedidos
-    .filter((p) => p.ubicacionId === ubId && p.estado === 'preparando')
-    .reduce((s, p) => s + p.items.reduce((a, i) => a + i.cantidad, 0), 0);
-// Espera (min) = (artículos × 1,5 + 2) × (1,5 si hay Alta Demanda). Se redondea hacia arriba a minutos enteros
-// para no prometer nunca menos tiempo del real; el color del chip se calcula con ese mismo valor.
-const calcularEspera = (articulos, altaDemanda = false) =>
-  Math.ceil((articulos * MIN_POR_ARTICULO + BASE_RECOGIDA_MIN) * (altaDemanda ? FACTOR_SOBRECARGA : 1));
-const esperaDe = (ub, pedidos, altaDemanda = false) => calcularEspera(articulosEnColaDe(ub.id, pedidos), altaDemanda);
+// Pedidos pendientes en una cafetería: cada pedido activo (preparando o listo para recoger)
+// suma carga. Al entregarlo deja de contar, igual que ocurre en una cola real.
+const pedidosEnColaDe = (ubId, pedidos) =>
+  pedidos.filter((p) => p.ubicacionId === ubId && p.estado !== 'entregado').length;
+// Espera (min) = (pedidos × 2,5 + 2) × (1,5 si hay Alta Demanda). Se redondea hacia arriba a minutos
+// enteros para no prometer nunca menos tiempo del real; el color del chip usa ese mismo valor.
+const calcularEspera = (pedidos, altaDemanda = false) =>
+  Math.ceil((pedidos * MIN_POR_PEDIDO + BASE_RECOGIDA_MIN) * (altaDemanda ? FACTOR_SOBRECARGA : 1));
+const esperaDe = (ub, pedidos, altaDemanda = false) => calcularEspera(pedidosEnColaDe(ub.id, pedidos), altaDemanda);
 // Hook: fuerza el recálculo de las esperas en pantalla exactamente cada 60 s (y devuelve la hora de la última actualización)
 function useRefrescoEsperas(ms = REFRESCO_ESPERAS_MS) {
   const [refresco, setRefresco] = useState(() => ({ tick: 0, hora: Date.now() }));
@@ -2387,7 +2385,7 @@ function AppPasajero({ visible, demo = false }) {
                 <h3 className="text-xl font-bold text-fo-blue">{t('¿Dónde recoges tu pedido?')}</h3>
                 <BarraAmarilla />
                 <p className="mt-3 text-sm font-light text-fo-grey">
-                  {t('Toca la cafetería del plano donde quieres recogerlo. Los tiempos dependen de los artículos que hay en cola.')}
+                  {t('Toca la cafetería del plano donde quieres recogerlo. Los tiempos dependen de los pedidos que hay en cola.')}
                 </p>
                 {altaDemanda ? (
                   <p className="mt-3 flex items-start gap-1.5 rounded-lg bg-fo-cream p-2.5 text-[13px] font-semibold text-fo-blue" data-aviso="alta-demanda-mapa">
@@ -2460,7 +2458,6 @@ function AppPasajero({ visible, demo = false }) {
                   <p className="text-[13px] text-fo-grey">{zonaUbicacion(ubElegida, idioma)}</p>
                 </div>
                 <div className="flex flex-col items-end gap-1">
-                  <ChipEspera min={esperas[ubElegida.id]} tam="sm" />
                   <button type="button" onClick={() => setFase('mapa')} className="text-xs font-semibold text-fo-blue underline">
                     {t('Cambiar')}
                   </button>
@@ -2553,7 +2550,6 @@ function AppPasajero({ visible, demo = false }) {
                             <p className="text-lg font-bold leading-tight text-fo-blue">{nombreUbicacion(ub, idioma)}</p>
                             <p className="text-[13px] text-fo-grey">{zonaUbicacion(ub, idioma)}</p>
                           </div>
-                          {pedidoSeg.estado !== 'listo' && pedidoSeg.estado !== 'entregado' ? <ChipEspera min={esperas[ub.id]} tam="sm" /> : null}
                         </div>
                       </div>
 
@@ -2707,8 +2703,8 @@ function useAhora(ms) {
 function TarjetaPedido({ pedido, ubicacion, columna, ahora, onAvanzar }) {
   const { t, eur, idioma, locale } = useI18n();
   const mins = Math.max(0, Math.floor((ahora - pedido.creado) / 60000));
-  // Se marca en rojo cuando un pedido en preparación ya ha superado el tiempo que le correspondía según el modelo de colas
-  const tarde = pedido.estado === 'preparando' && mins >= calcularEspera(pedido.items.reduce((s, i) => s + i.cantidad, 0));
+  // Se marca en rojo cuando un pedido en preparación ya ha superado el tiempo base de un pedido
+  const tarde = pedido.estado === 'preparando' && mins >= calcularEspera(1);
   const hora = new Date(pedido.creado).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
   const Flecha = columna.estado === 'listo' ? Check : ArrowRight;
   return (
@@ -2770,7 +2766,7 @@ function PanelTripulacion() {
             {ubicaciones.map((u) => (
               <span
                 key={u.id}
-                title={t('{n} artículos en cola', { n: articulosEnColaDe(u.id, pedidos) })}
+                title={t('{n} pedidos en cola', { n: pedidosEnColaDe(u.id, pedidos) })}
                 className="flex items-center gap-2 rounded-full bg-white/10 py-1 pl-3 pr-1 text-xs font-semibold"
               >
                 {cortoUbicacion(u, idioma)}
