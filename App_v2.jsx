@@ -379,7 +379,6 @@ const PUNTOS_PLUS_POR_EURO = 10;
 // Venta cruzada: si el carrito lleva comida pero ninguna bebida, sugerimos una bebida.
 const CATEGORIAS_COMIDA = ['Bocadillos', 'Sandwiches', 'Croissants', 'Bolleria', 'Snacks'];
 const CATEGORIAS_CON_BEBIDA = ['Aguas', 'Refrescos Cola', 'Cervezas', 'Cafés', 'Ofertas']; // las ofertas ya incluyen bebida
-const ID_BEBIDA_SUGERIDA = 1; // Agua Sin Gas 50cl
 
 /* -------------------------------------------------------------------
    2. UTILIDADES
@@ -491,6 +490,22 @@ const TEXTOS_EN = {
   '¿Añades un Agua por {precio}?': 'Add a water for {precio}?',
   'Recomendado para ti': 'Recommended for you',
   'Basado en tu pedido y la hora': 'Based on your order and the time',
+  'Con tu {producto}, esto es lo que mejor le pega a {momento}.': 'With your {producto}, this is what goes best at {momento}.',
+  'madrugada': 'late night',
+  'media mañana': 'mid-morning',
+  'mediodía': 'lunchtime',
+  'tarde': 'afternoon',
+  'noche': 'evening',
+  'A mediodía, tu café pide algo de comer.': 'At lunchtime, your coffee is asking for something to eat.',
+  'A mediodía apetece algo de comer.': 'At lunchtime you fancy something to eat.',
+  'Para tu comida, algo fresco al lado.': 'Something fresh alongside your meal.',
+  'Un dulce para tu café.': 'A sweet treat for your coffee.',
+  'Con tu cerveza, un snack salado.': 'A salty snack with your beer.',
+  'Ese dulce pide un café.': 'That sweet treat is asking for a coffee.',
+  'Tu oferta queda redonda con un extra.': 'Your deal is complete with an extra.',
+  'Para cerrar, algo dulce.': 'Something sweet to finish.',
+  'Para redondear tu pedido': 'To round off your order',
+  'Un clásico que siempre funciona': 'A classic that always works',
   'Para acompañar tu café': 'To go with your coffee',
   'Para completar tu menú': 'To complete your meal',
   'Para picar con la cerveza': 'To snack with your beer',
@@ -691,24 +706,29 @@ const NIVELES_ESPERA = {
 // Equivale a Math.floor(total * 10); se pasa por céntimos enteros para evitar errores de coma flotante.
 const puntosPlusDe = (total) => Math.floor(Math.round(total * 100) / (100 / PUNTOS_PLUS_POR_EURO));
 
-// ¿Hay comida sin bebida en el carrito? Devuelve el producto a sugerir (si existe y hay stock) o null.
-function sugerenciaBebida(lineas, productos) {
-  const hayComida = lineas.some((l) => CATEGORIAS_COMIDA.includes(l.categoria));
-  const hayBebida = lineas.some((l) => CATEGORIAS_CON_BEBIDA.includes(l.categoria));
-  if (!hayComida || hayBebida) return null;
-  const p = productos.find((x) => x.id === ID_BEBIDA_SUGERIDA);
-  return p && p.stock_disponible > 0 ? p : null;
-}
+/* Recomendaciones locales (sin LLM): leen la combinación del carrito, la hora
+   y el stock, y eligen hasta 3 complementos con una explicación natural. */
+const momentoDelDia = (hora) => {
+  if (hora < 6) return 'madrugada';
+  if (hora < 11) return 'media mañana';
+  if (hora < 15) return 'mediodía';
+  if (hora < 19) return 'tarde';
+  if (hora < 24) return 'noche';
+  return 'madrugada';
+};
 
-/* Recomendaciones locales (sin LLM): combinan el carrito, la hora del día,
-   las categorías y el stock. Devuelven hasta 3 productos con un motivo. */
-const FRANJAS_RECOMENDACION = [
-  { desde: 6, hasta: 11, cats: ['Cafés', 'Croissants', 'Bolleria'], motivo: 'Un clásico a esta hora' },
-  { desde: 11, hasta: 15, cats: ['Bocadillos', 'Sandwiches', 'Aguas', 'Refrescos Cola', 'Cervezas'], motivo: 'Para completar tu menú' },
-  { desde: 15, hasta: 19, cats: ['Cafés', 'Bolleria', 'Snacks'], motivo: 'Un clásico a esta hora' },
-  { desde: 19, hasta: 24, cats: ['Bocadillos', 'Sandwiches', 'Cervezas', 'Snacks'], motivo: 'Para completar tu menú' },
-  { desde: 0, hasta: 6, cats: ['Aguas', 'Snacks', 'Cafés'], motivo: 'Un clásico a esta hora' },
-];
+function resumenRecomendaciones(lineas, ahora = Date.now()) {
+  if (!lineas.length) return null;
+  const base =
+    lineas.find((l) => ['Bocadillos', 'Sandwiches', 'Ofertas'].includes(l.categoria)) ||
+    lineas.find((l) => l.categoria === 'Cafés') ||
+    lineas[0];
+  return {
+    clave: 'Con tu {producto}, esto es lo que mejor le pega a {momento}.',
+    baseId: base.id,
+    momento: momentoDelDia(new Date(ahora).getHours()),
+  };
+}
 
 function recomendarProductos({ lineas, productos, ahora = Date.now() }) {
   if (!lineas.length) return [];
@@ -718,7 +738,8 @@ function recomendarProductos({ lineas, productos, ahora = Date.now() }) {
   if (!disponibles.length) return [];
 
   const hora = new Date(ahora).getHours();
-  const franja = FRANJAS_RECOMENDACION.find((f) => hora >= f.desde && hora < f.hasta) || FRANJAS_RECOMENDACION[0];
+  const esMediodia = hora >= 11 && hora < 15;
+  const hayPlato = lineas.some((l) => ['Bocadillos', 'Sandwiches', 'Ofertas'].includes(l.categoria));
   const hayComida = lineas.some((l) => CATEGORIAS_COMIDA.includes(l.categoria));
   const hayBebida = lineas.some((l) => CATEGORIAS_CON_BEBIDA.includes(l.categoria));
   const hayCafe = cats.has('Cafés');
@@ -728,21 +749,42 @@ function recomendarProductos({ lineas, productos, ahora = Date.now() }) {
   const bebidasHora = hora >= 12 ? ['Aguas', 'Refrescos Cola', 'Cervezas'] : ['Aguas', 'Refrescos Cola', 'Cafés'];
 
   const reglas = [];
-  if (hayCafe && !hayDulce) reglas.push({ cats: ['Croissants', 'Bolleria'], motivo: 'Para acompañar tu café', peso: 100 });
-  if (hayComida && !hayBebida) reglas.push({ cats: bebidasHora, motivo: 'Para completar tu menú', peso: 120 });
-  if (hayCerveza && !haySnack) reglas.push({ cats: ['Snacks'], motivo: 'Para picar con la cerveza', peso: 90 });
-  if (hayDulce && !hayCafe) reglas.push({ cats: ['Cafés'], motivo: 'El acompañamiento perfecto', peso: 90 });
-  if (cats.has('Ofertas')) reglas.push({ cats: ['Snacks'], motivo: 'Un extra para tu oferta', peso: 60 });
-  if (hayComida && hayBebida && !haySnack && !hayDulce) {
-    reglas.push({ cats: ['Snacks', 'Bolleria'], motivo: 'Un extra para tu pedido', peso: 70 });
+  if (esMediodia && !hayPlato) {
+    reglas.push({
+      cats: ['Bocadillos', 'Sandwiches'],
+      motivo: hayCafe ? 'A mediodía, tu café pide algo de comer.' : 'A mediodía apetece algo de comer.',
+      peso: 170,
+    });
   }
-  if (!hayComida) reglas.push({ cats: CATEGORIAS_COMIDA, motivo: 'Un clásico a esta hora', peso: 70 });
-  reglas.push({ cats: franja.cats, motivo: franja.motivo, peso: 50 });
+  if (hayComida && !hayBebida) {
+    reglas.push({ cats: bebidasHora, motivo: 'Para tu comida, algo fresco al lado.', peso: 150 });
+  }
+  if (hayCafe && !hayDulce) {
+    reglas.push({ cats: ['Croissants', 'Bolleria'], motivo: esMediodia ? 'Un dulce para tu café.' : 'Para acompañar tu café', peso: esMediodia ? 90 : 110 });
+  }
+  if (hayCerveza && !haySnack) {
+    reglas.push({ cats: ['Snacks'], motivo: 'Con tu cerveza, un snack salado.', peso: 120 });
+  }
+  if (hayDulce && !hayCafe) {
+    reglas.push({ cats: ['Cafés'], motivo: 'Ese dulce pide un café.', peso: 100 });
+  }
+  if (cats.has('Ofertas')) {
+    reglas.push({ cats: ['Snacks', 'Bolleria'], motivo: 'Tu oferta queda redonda con un extra.', peso: 80 });
+  }
+  if (hayPlato && hayBebida && !hayDulce && !haySnack) {
+    reglas.push({ cats: ['Bolleria', 'Croissants', 'Snacks'], motivo: 'Para cerrar, algo dulce.', peso: 75 });
+  }
+  if (!hayPlato && !hayComida) {
+    reglas.push({ cats: ['Bocadillos', 'Sandwiches', 'Bolleria'], motivo: 'Para redondear tu pedido', peso: 55 });
+  }
+  if (!reglas.length) {
+    reglas.push({ cats: ['Snacks', 'Bolleria', 'Aguas'], motivo: 'Un clásico que siempre funciona', peso: 50 });
+  }
 
   const puntos = new Map();
   reglas.forEach((r) => {
     disponibles
-      .filter((p) => r.cats.includes(p.categoria))
+      .filter((p) => r.cats.includes(p.categoria) && !cats.has(p.categoria))
       .forEach((p) => {
         const actual = puntos.get(p.id) || { producto: p, puntos: 0, motivos: [] };
         actual.puntos += r.peso;
@@ -751,10 +793,17 @@ function recomendarProductos({ lineas, productos, ahora = Date.now() }) {
       });
   });
 
-  return [...puntos.values()]
-    .sort((a, b) => b.puntos - a.puntos || b.producto.stock_disponible - a.producto.stock_disponible)
-    .slice(0, 3)
-    .map((x) => ({ ...x.producto, motivo: x.motivos[0] }));
+  const ordenados = [...puntos.values()].sort(
+    (a, b) => b.puntos - a.puntos || b.producto.stock_disponible - a.producto.stock_disponible
+  );
+  const elegidos = [];
+  ordenados.forEach((c) => {
+    if (elegidos.length < 3 && !elegidos.some((e) => e.producto.categoria === c.producto.categoria)) elegidos.push(c);
+  });
+  ordenados.forEach((c) => {
+    if (elegidos.length < 3 && !elegidos.includes(c)) elegidos.push(c);
+  });
+  return elegidos.map((x) => ({ ...x.producto, motivo: x.motivos[0] }));
 }
 
 /* -------------------------------------------------------------------
@@ -1470,7 +1519,25 @@ function ChipConexion() {
   );
 }
 
-// Selector de idioma: círculo compacto que alterna ES / EN
+function BanderaIdioma({ idioma }) {
+  if (idioma === 'en') {
+    return (
+      <svg viewBox="0 0 60 60" className="h-full w-full" aria-hidden="true">
+        <rect width="60" height="60" fill="#fff" />
+        <rect x="24" width="12" height="60" fill="#CE1124" />
+        <rect y="24" width="60" height="12" fill="#CE1124" />
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox="0 0 60 60" className="h-full w-full" aria-hidden="true">
+      <rect width="60" height="60" fill="#AA151B" />
+      <rect y="15" width="60" height="30" fill="#F1BF00" />
+    </svg>
+  );
+}
+
+// Selector de idioma: muestra la bandera del idioma activo.
 function BotonIdioma({ className = '' }) {
   const { idioma, cambiarIdioma, t } = useI18n();
   return (
@@ -1480,9 +1547,9 @@ function BotonIdioma({ className = '' }) {
       aria-label={t('Cambiar idioma')}
       title={t('Cambiar idioma')}
       data-btn="idioma"
-      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-[11px] font-extrabold tracking-wide text-white transition hover:bg-white/20 ${className}`}
+      className={`flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full ring-1 ring-white/40 transition hover:ring-white/80 ${className}`}
     >
-      {idioma === 'es' ? 'ES' : 'EN'}
+      <BanderaIdioma idioma={idioma} />
     </button>
   );
 }
@@ -1912,6 +1979,7 @@ function AppPasajero({ visible, demo = false }) {
     () => recomendarProductos({ lineas, productos, ahora: refresco.hora }),
     [lineas, productos, refresco.hora]
   );
+  const resumenReco = useMemo(() => resumenRecomendaciones(lineas, refresco.hora), [lineas, refresco.hora]);
   const ubElegida = ubicaciones.find((u) => u.id === ubicacionId) || null;
   const masRapida = useMemo(() => {
     const orden = [...ubicaciones].sort((a, b) => esperas[a.id] - esperas[b.id]);
@@ -2245,7 +2313,17 @@ function AppPasajero({ visible, demo = false }) {
                       </span>
                       <div className="min-w-0">
                         <p className="text-sm font-bold leading-tight text-fo-blue">{t('Recomendado para ti')}</p>
-                        <p className="text-[11px] text-fo-grey">{t('Basado en tu pedido y la hora')}</p>
+                        <p className="text-[11px] leading-snug text-fo-grey">
+                          {resumenReco
+                            ? t(resumenReco.clave, {
+                                producto: nombreProducto(
+                                  lineas.find((l) => l.id === resumenReco.baseId) || lineas[0],
+                                  idioma
+                                ),
+                                momento: t(resumenReco.momento),
+                              })
+                            : t('Basado en tu pedido y la hora')}
+                        </p>
                       </div>
                     </div>
                     <ul className="mt-2 divide-y divide-fo-line">
@@ -2555,7 +2633,7 @@ function AppPasajero({ visible, demo = false }) {
                         <span className="min-w-0 flex-1">
                           <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
                             <b className="text-lg leading-none text-fo-blue">{numeroPedido(p.numero)}</b>
-                            <Pill tone={info.tono}>{info.texto}</Pill>
+                            <Pill tone={info.tono}>{t(info.texto)}</Pill>
                           </span>
                           <span className="mt-1 block truncate text-[13px] text-fo-grey">
                             {nombreUbicacion(ub, idioma)} · {t('{n} artículos', { n: articulos })} · {eur(p.total)}
@@ -2708,7 +2786,6 @@ function PanelTripulacion() {
             </div>
             <div className="flex items-center gap-1">
               <ChipConexion />
-              <BotonIdioma />
               <BotonReiniciar />
             </div>
             <button
@@ -2800,7 +2877,6 @@ function PanelTripulacion() {
    8. APP: una vista según la URL (/cliente, /cliente_pc, /admin)
    ------------------------------------------------------------------- */
 function BarraDemo() {
-  const { t } = useI18n();
   return (
     <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 bg-fo-blue px-3 py-2 text-white shadow-md sm:px-5" data-barra="demo">
       <div className="flex min-w-0 items-center gap-2">
@@ -2808,26 +2884,25 @@ function BarraDemo() {
           <Smartphone size={17} />
         </span>
         <div className="min-w-0">
-          <p className="truncate text-sm font-bold leading-tight">{t('Demo PC')} · Click &amp; Collect</p>
-          <p className="hidden truncate text-[11px] text-white/70 sm:block">{t('Esta es la vista que ve el cliente en su móvil')}</p>
+          <p className="truncate text-sm font-bold leading-tight">Demo PC · Click &amp; Collect</p>
+          <p className="hidden truncate text-[11px] text-white/70 sm:block">Esta es la vista que ve el cliente en su móvil</p>
         </div>
       </div>
-      <nav className="flex flex-wrap items-center gap-1.5" aria-label={t('Demo PC')}>
+      <nav className="flex flex-wrap items-center gap-1.5" aria-label="Demo PC">
         <a
           href="../cliente/"
           className="rounded-full bg-fo-yellow px-3 py-1.5 text-xs font-bold text-fo-blue transition hover:bg-white"
-          title={t('Abrir app del pasajero')}
+          title="Abrir app del pasajero"
         >
-          {t('App cliente')}
+          App cliente
         </a>
         <a
           href="../admin/"
           className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-white/20"
-          title={t('Abrir panel de tripulación')}
+          title="Abrir panel de tripulación"
         >
-          {t('Panel tripulación')}
+          Panel tripulación
         </a>
-        <BotonIdioma />
       </nav>
     </div>
   );
