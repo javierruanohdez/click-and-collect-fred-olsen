@@ -1,0 +1,41 @@
+id,nombre,precio,categoria,imagen_url,stock_disponible
+1,Agua Sin Gas 50cl,1.75,Aguas,lucide:droplet,180
+2,Bocadillo Pollo Gourmet,5.72,Bocadillos,lucide:sandwich,45
+3,Café Cortado,1.9,Cafés,lucide:coffee,250
+4,Sándwich Mixto,5.7,Sandwiches,lucide:layers,40
+5,Bocadillo Jamón Serrano y Queso,5.76,Bocadillos,lucide:sandwich,45
+6,Oferta Bollería + Bebida Caliente,4.2,Ofertas,lucide:sparkles,60
+7,Café Solo,1.9,Cafés,lucide:coffee,250
+8,Cerveza Dorada,2.77,Cervezas,lucide:beer,120
+9,Sándwich Atún,5.73,Sandwiches,lucide:layers,35
+10,Bocadillo Tortilla,5.77,Bocadillos,lucide:sandwich,35
+11,Bocadillo Chorizo de Teror y Queso Ahumado,5.95,Bocadillos,lucide:sandwich,30
+12,Bocadillo Pata Asada y Queso Tierno,5.95,Bocadillos,lucide:sandwich,30
+13,Bocadillo Vegetal con Atún,5.75,Bocadillos,lucide:sandwich,25
+14,Sándwich Pollo César,5.8,Sandwiches,lucide:layers,30
+15,Sándwich Vegetal,5.5,Sandwiches,lucide:layers,25
+16,Café con Leche,2.1,Cafés,lucide:coffee,250
+17,Café Leche y Leche,2.2,Cafés,lucide:coffee,200
+18,Barraquito / Zaperoco,2.6,Cafés,lucide:coffee,120
+19,Infusión / Té Variado,1.9,Cafés,lucide:cup-soda,150
+20,Croissant de Mantequilla,2.3,Croissants,lucide:croissant,45
+21,Croissant Mixto Jamón y Queso,3.8,Croissants,lucide:croissant,30
+22,Napolitana de Chocolate,2.5,Bolleria,lucide:cookie,40
+23,Muffin Artesano de Arándanos,2.8,Bolleria,lucide:cake-slice,30
+24,Donut Glaseado,2.2,Bolleria,lucide:circle-dot,35
+25,Agua Con Gas 50cl,1.9,Aguas,lucide:droplet,80
+26,Coca-Cola Original 33cl,2.6,Refrescos Cola,lucide:cup-soda,110
+27,Coca-Cola Zero 33cl,2.6,Refrescos Cola,lucide:cup-soda,110
+28,Clipper de Fresa 33cl,2.6,Refrescos Cola,lucide:cup-soda,90
+29,Appletiser 27.5cl,2.8,Refrescos Cola,lucide:cup-soda,75
+30,Cerveza Dorada Especial,3.1,Cervezas,lucide:beer,90
+31,Cerveza Tropical Sin Filtros,3.1,Cervezas,lucide:beer,85
+32,"Cerveza Dorada Sin Alcohol 0,0",2.77,Cervezas,lucide:beer,70
+33,Papas Fritas Munchitos,1.95,Snacks,lucide:package,80
+34,Ambrosía Tirma,1.5,Snacks,lucide:candy,100
+35,Papas Fritas Lay's al Punto de Sal,2.2,Snacks,lucide:package,70
+36,Yogur Artesano Canario con Gofio,2.5,Snacks,lucide:ice-cream-bowl,25
+37,Fruta Fresca Km 0 (Plátano de Canarias / Manzana),1.6,Snacks,lucide:apple,50
+38,Oferta Bocadillo + Refresco o Cerveza,7.8,Ofertas,lucide:sparkles,50
+39,Oferta Sándwich + Agua o Refresco,7.5,Ofertas,lucide:sparkles,50
+40,Menú Web+ Canjeable (Principal + Bebida + Snack),8.9,Ofertas,lucide:award,60
