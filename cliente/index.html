@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Click &amp; Collect a bordo · Fred. Olsen Express</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300;0,400;0,600;0,700;0,800&display=swap">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  /* Tokens de diseño extraídos de diseño_app_fred_olsen.css */
+  tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        fo: {
+          blue: '#002F6C',
+          yellow: '#FFD100',
+          red: '#E2251D',
+          grey: '#535353',
+          ice: '#F4F7FF',
+          sky: '#E5EFF6',
+          line: '#E4E4E4',
+          cream: '#FEF7CB',
+          green: '#1C9561',
+          ink: '#0B1F3F',
+        },
+      },
+      fontFamily: { sans: ['"Open Sans"', 'Arial', 'Verdana', 'sans-serif'] },
+      borderRadius: { btn: '0.375rem', card: '1rem' },
+    },
+  },
+};
+</script>
+<style>
+  html, body { margin: 0; background: #F4F7FF; }
+  body { font-family: 'Open Sans', Arial, Verdana, sans-serif; font-size: 14px; line-height: 1.5; color: #535353; -webkit-font-smoothing: antialiased; }
+  button { cursor: pointer; }
+  button:disabled { cursor: not-allowed; }
+  button:focus-visible { outline: 2px solid #002F6C; outline-offset: 2px; }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-thumb { background: #C9D3E3; border-radius: 6px; }
+  @keyframes fo-slide-up { from { transform: translateY(100%); } to { transform: none; } }
+  @keyframes fo-slide-in { from { transform: translateX(28px); opacity: 0; } to { transform: none; opacity: 1; } }
+  @keyframes fo-fade { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes fo-bar { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+  @keyframes fo-toast { from { transform: translateY(-24px); opacity: 0; } to { transform: none; opacity: 1; } }
+  @keyframes fo-pop { 0% { transform: scale(.7); opacity: 0; } 70% { transform: scale(1.04); } 100% { transform: scale(1); opacity: 1; } }
+  @keyframes fo-ring { 0% { box-shadow: 0 0 0 0 rgba(255,209,0,.7); } 100% { box-shadow: 0 0 0 12px rgba(255,209,0,0); } }
+  @keyframes fo-blink { 50% { opacity: .3; } }
+  .fo-sheet-in { animation: fo-slide-up .3s ease both; }
+  .fo-slide-in { animation: fo-slide-in .3s ease both; }
+  .fo-fade-in { animation: fo-fade .2s ease both; }
+  .fo-bar-in { animation: fo-bar .25s ease both; }
+  .fo-toast-in { animation: fo-toast .3s ease both; }
+  .fo-pop { animation: fo-pop .35s ease both; }
+  .fo-ring { animation: fo-ring 1.4s ease-out infinite; }
+  .fo-blink { animation: fo-blink 1s ease-in-out infinite; }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }
+</style>
+<style>
+  #cargando { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 24px; text-align: center; background: #F4F7FF; color: #002F6C; }
+  #root:not(:empty) ~ #cargando { display: none; }
+  #cargando .rueda { width: 44px; height: 44px; border-radius: 50%; border: 4px solid rgba(0,47,108,.2); border-top-color: #002F6C; animation: fo-giro .8s linear infinite; }
+  #cargando p { margin: 0; font-weight: 700; font-size: 18px; }
+  #cargando .ayuda { max-width: 460px; font-weight: 400; font-size: 13px; color: #535353; animation: fo-fade 0.4s ease 7s both; }
+  #cargando code { background: #fff; padding: 1px 5px; border-radius: 4px; }
+  @keyframes fo-giro { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<div id="cargando" role="status">
+  <div class="rueda" aria-hidden="true"></div>
+  <p>Cargando Click &amp; Collect a bordo…</p>
+  <p class="ayuda">¿Esta pantalla no cambia? Abre esta página desde un servidor local (por ejemplo <code>npx serve</code>). El navegador no permite leer <code>../App_v2.jsx</code> desde <code>file://</code>.</p>
+</div>
+
+<!-- React 18 (producción, minificado) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<!-- Babel standalone 7: compila el JSX en el navegador -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+
+<!-- Iconos Lucide (build UMD de lucide-react) -->
+<script>window.react = window.React;</script>
+<script src="https://cdn.jsdelivr.net/npm/lucide-react@1.0.0/dist/umd/lucide-react.min.js"></script>
+
+<!-- Firebase (SDK modular desde el CDN oficial de Google) -->
+<script type="module">
+  import * as firebaseApp from 'https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js';
+  import * as firebaseFirestore from 'https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js';
+  window.__firebase = { app: firebaseApp, firestore: firebaseFirestore };
+</script>
+
+<!-- Modo de esta entrada: app del pasajero a pantalla completa -->
+<script>window.__MODO__ = 'cliente';</script>
+
+<!-- Puente de módulos para Babel en el navegador -->
+<script>
+  var exports = {};
+  function require(nombre) {
+    switch (nombre) {
+      case 'react': return window.React;
+      case 'lucide-react': return window.LucideReact;
+      case 'firebase/app':
+      case 'firebase/firestore':
+        if (!window.__firebase) console.error('[Click & Collect] No se pudo cargar el SDK de Firebase desde www.gstatic.com: la app seguirá en modo local.');
+        return window.__firebase ? window.__firebase[nombre === 'firebase/app' ? 'app' : 'firestore'] : {};
+      default: throw new Error('Módulo no disponible en el navegador: ' + nombre);
+    }
+  }
+</script>
+
+<!-- La app compartida -->
+<script type="text/babel" data-presets="env,react" src="../App_v2.jsx"></script>
+
+<!-- Montaje -->
+<script type="text/babel" data-presets="env,react">ReactDOM.createRoot(document.getElementById('root')).render(<App/>);</script>
+</body>
+</html>

@@ -25,6 +25,7 @@ import {
   Flame,
   IceCreamBowl,
   Info,
+  Languages,
   Layers,
   Loader2,
   MapPin,
@@ -63,6 +64,15 @@ import {
   writeBatch,
   serverTimestamp,
 } from 'firebase/firestore';
+
+/* -------------------------------------------------------------------
+   0. MODO DE ENTRADA
+   Cada index.html (cliente / cliente_pc / admin) define window.__MODO__.
+   La app monta únicamente la vista que corresponde a esa entrada.
+   ------------------------------------------------------------------- */
+const MODO = (typeof window !== 'undefined' && window.__MODO__) || 'cliente';
+const MODO_PC = MODO === 'cliente_pc';
+const MODO_ADMIN = MODO === 'admin';
 
 /* ====================================================================
    CLICK & COLLECT A BORDO · VERSIÓN 2 · sincronización en tiempo real (Firebase / Firestore)
@@ -219,6 +229,65 @@ function cargarCatalogo(csv) {
 
 const PRODUCTOS_INICIALES = cargarCatalogo(CATALOGO_CSV);
 
+// Traducción de los 40 productos del catálogo (la clave es el id del CSV).
+const NOMBRES_EN = {
+  1: 'Still Water 50cl',
+  2: 'Gourmet Chicken Baguette',
+  3: 'Cortado Coffee',
+  4: 'Ham & Cheese Sandwich',
+  5: 'Serrano Ham & Cheese Baguette',
+  6: 'Pastry + Hot Drink Deal',
+  7: 'Espresso',
+  8: 'Golden Beer',
+  9: 'Tuna Sandwich',
+  10: 'Spanish Omelette Baguette',
+  11: 'Teror Chorizo & Smoked Cheese Baguette',
+  12: 'Roast Pork & Mild Cheese Baguette',
+  13: 'Vegetable & Tuna Baguette',
+  14: 'Chicken Caesar Sandwich',
+  15: 'Vegetable Sandwich',
+  16: 'Coffee with Milk',
+  17: 'Leche y Leche Coffee',
+  18: 'Barraquito / Zaperoco',
+  19: 'Infusion / Assorted Tea',
+  20: 'Butter Croissant',
+  21: 'Ham & Cheese Croissant',
+  22: 'Chocolate Pastry',
+  23: 'Artisan Blueberry Muffin',
+  24: 'Glazed Donut',
+  25: 'Sparkling Water 50cl',
+  26: 'Coca-Cola Original 33cl',
+  27: 'Coca-Cola Zero 33cl',
+  28: 'Strawberry Clipper 33cl',
+  29: 'Appletiser 27.5cl',
+  30: 'Special Golden Beer',
+  31: 'Tropical Unfiltered Beer',
+  32: 'Alcohol-Free Golden Beer 0.0',
+  33: 'Munchitos Crisps',
+  34: 'Ambrosía Tirma',
+  35: 'Lay’s Salted Crisps',
+  36: 'Artisan Canarian Yogurt with Gofio',
+  37: 'Fresh Km 0 Fruit (Canary Banana / Apple)',
+  38: 'Baguette + Soft Drink or Beer Deal',
+  39: 'Sandwich + Water or Soft Drink Deal',
+  40: 'Web+ Menu (Main + Drink + Snack)',
+};
+const CATEGORIAS_EN = {
+  'Ofertas': 'Deals',
+  'Cafés': 'Coffee',
+  'Bocadillos': 'Baguettes',
+  'Sandwiches': 'Sandwiches',
+  'Croissants': 'Croissants',
+  'Bolleria': 'Pastries',
+  'Snacks': 'Snacks',
+  'Aguas': 'Water',
+  'Refrescos Cola': 'Soft Drinks',
+  'Cervezas': 'Beers',
+};
+const nombreProducto = (p, idioma) => (idioma === 'en' && NOMBRES_EN[p.id]) || p.nombre;
+const nombreItem = (item, idioma) => (idioma === 'en' && NOMBRES_EN[item.id]) || item.nombre;
+const nombreCategoria = (categoria, idioma) => (idioma === 'en' && CATEGORIAS_EN[categoria]) || categoria;
+
 // imagen_url: "lucide:nombre-del-icono" pinta un icono Lucide; cualquier otra URL se pinta como <img>.
 const ICONOS_LUCIDE = {
   droplet: Droplet, sandwich: Sandwich, layers: Layers, sparkles: Sparkles, coffee: Coffee, beer: Beer,
@@ -245,23 +314,45 @@ const CATEGORIAS = (() => {
   const extra = presentes.filter((k) => !CATEGORIAS_CONFIG.some((c) => c.clave === k)).map((k) => ({ clave: k, icono: Utensils }));
   return [...conocidas, ...extra].map((c) => ({ nombre: c.clave, etiqueta: c.etiqueta || c.clave, icono: c.icono }));
 })();
+const etiquetaCategoria = (c, idioma) => (idioma === 'en' ? CATEGORIAS_EN[c.nombre] || c.etiqueta : c.etiqueta);
 
 // El tiempo de espera de cada cafetería NO es un dato fijo: se calcula con el modelo de colas de la sección 2
 const UBICACIONES_INICIALES = [
-  { id: 'proa', nombre: 'Cafetería Proa', corto: 'Proa', zona: 'Cubierta 6 · Zona de proa' },
-  { id: 'centro', nombre: 'Cafetería Centro', corto: 'Centro', zona: 'Cubierta 6 · Zona central' },
-  { id: 'popa', nombre: 'Cafetería Popa', corto: 'Popa', zona: 'Cubierta 6 · Zona de popa' },
+  { id: 'proa', nombre: 'Cafetería Proa', nombreEn: 'Bow Café', corto: 'Proa', cortoEn: 'Bow', zona: 'Cubierta 6 · Zona de proa', zonaEn: 'Deck 6 · Bow area' },
+  { id: 'centro', nombre: 'Cafetería Centro', nombreEn: 'Centre Café', corto: 'Centro', cortoEn: 'Centre', zona: 'Cubierta 6 · Zona central', zonaEn: 'Deck 6 · Central area' },
+  { id: 'popa', nombre: 'Cafetería Popa', nombreEn: 'Stern Café', corto: 'Popa', cortoEn: 'Stern', zona: 'Cubierta 6 · Zona de popa', zonaEn: 'Deck 6 · Stern area' },
 ];
+const nombreUbicacion = (u, idioma) => (idioma === 'en' && u.nombreEn) || u.nombre;
+const cortoUbicacion = (u, idioma) => (idioma === 'en' && u.cortoEn) || u.corto;
+const zonaUbicacion = (u, idioma) => (idioma === 'en' && u.zonaEn) || u.zona;
+
+// Traduce avisos/notificaciones dinámicos y resuelve el nombre de la cafetería en el idioma activo.
+function textoNotificacion(n, idioma, ubicaciones, t) {
+  if (!n) return '';
+  if (!n.clave) return t(n.texto);
+  const vars = { ...(n.vars || {}) };
+  if (vars.ubicacionId) {
+    const ub = ubicaciones.find((u) => u.id === vars.ubicacionId);
+    vars.ubicacion = ub ? nombreUbicacion(ub, idioma) : '';
+    delete vars.ubicacionId;
+  }
+  return t(n.clave, vars);
+}
 
 // Color de la etiqueta de cada cafetería en las tarjetas de la tripulación
 const TONO_ETIQUETA_UBICACION = { proa: 'blue', centro: 'cream', popa: 'yellow' };
 
 const METODOS_PAGO = [
-  { id: 'google', nombre: 'Google Pay', icono: Wallet },
-  { id: 'apple', nombre: 'Apple Pay', icono: Smartphone },
-  { id: 'bizum', nombre: 'Bizum', icono: Banknote },
-  { id: 'tarjeta', nombre: 'Tarjeta', icono: CreditCard },
+  { id: 'google', nombre: 'Google Pay', nombreEn: 'Google Pay', icono: Wallet },
+  { id: 'apple', nombre: 'Apple Pay', nombreEn: 'Apple Pay', icono: Smartphone },
+  { id: 'bizum', nombre: 'Bizum', nombreEn: 'Bizum', icono: Banknote },
+  { id: 'tarjeta', nombre: 'Tarjeta', nombreEn: 'Card', icono: CreditCard },
 ];
+const nombreMetodo = (m, idioma) => (idioma === 'en' && m.nombreEn) || m.nombre;
+const nombreMetodoGuardado = (nombre, idioma) => {
+  const m = METODOS_PAGO.find((x) => x.nombre === nombre);
+  return m ? nombreMetodo(m, idioma) : nombre;
+};
 
 // Ciclo de vida de un pedido (estilo pantalla de cocina): al pagar entra DIRECTAMENTE en 'preparando'.
 //   preparando → listo → entregado
@@ -293,8 +384,282 @@ const ID_BEBIDA_SUGERIDA = 1; // Agua Sin Gas 50cl
 /* -------------------------------------------------------------------
    2. UTILIDADES
    ------------------------------------------------------------------- */
-const eur = (n) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(n);
+const formatearEur = (n, idioma = 'es') =>
+  new Intl.NumberFormat(idioma === 'en' ? 'en-GB' : 'es-ES', { style: 'currency', currency: 'EUR' }).format(n);
 const numeroPedido = (n) => `#${String(n).padStart(3, '0')}`;
+
+/* -------------------------------------------------------------------
+   2b. INTERNACIONALIZACIÓN (ES / EN)
+   El castellano es el idioma base: el diccionario solo necesita las
+   traducciones al inglés. Las cadenas con datos usan marcadores {x}.
+   ------------------------------------------------------------------- */
+const TEXTOS_EN = {
+  /* General */
+  'Cambiar idioma': 'Change language',
+  'Cerrar': 'Close',
+  'Volver': 'Back',
+  'Atrás': 'Back',
+  'Añadir': 'Add',
+  'Añadir al carrito': 'Add to cart',
+  'Quitar uno': 'Remove one',
+  'Añadir uno más': 'Add one more',
+  'Quitar {nombre}': 'Remove {nombre}',
+  'Agotado': 'Sold out',
+  'Últimas {n}': 'Only {n} left',
+  'Total': 'Total',
+  'Reintentar': 'Retry',
+  'Cambiar': 'Change',
+  'Prototipo': 'Prototype',
+  'A bordo': 'On board',
+  'Resumen': 'Summary',
+  'Recogida': 'Pickup',
+  'Pago': 'Payment',
+  'Fases del pedido': 'Order stages',
+  'Pedido {num}': 'Order {num}',
+  'Número de pedido {num}': 'Order number {num}',
+  'Pedido {numero}': 'Order {numero}',
+  'Número de pedido {numero}': 'Order number {numero}',
+  'Ver seguimiento del pedido {numero}': 'View order {numero}',
+  'Progreso del pedido': 'Order progress',
+  'Categorías': 'Categories',
+  'Cafetería:': 'Café:',
+  'Todas': 'All',
+  'activos': 'active',
+  'entregados': 'delivered',
+  'Ahora mismo': 'Just now',
+  'hace {n} min': '{n} min ago',
+  'Pago: {metodo}': 'Payment: {metodo}',
+
+  /* Conexión y carga */
+  'Modo local': 'Local mode',
+  'Conectando…': 'Connecting…',
+  'En directo': 'Live',
+  'Sin conexión': 'Offline',
+  'Error de conexión': 'Connection error',
+  'Conexión: {texto}': 'Connection: {texto}',
+  'No se puede conectar': 'Cannot connect',
+  'No hay conexión con el servidor. Comprueba tu conexión a internet.': 'No server connection. Check your internet connection.',
+  'Sincronizando los pedidos en tiempo real': 'Syncing orders in real time',
+  'Sin conexión con el servidor. Mostrando los últimos datos guardados.': 'No server connection. Showing the last saved data.',
+  'Firebase sin configurar: los pedidos solo viven en este navegador. Pega tus credenciales en firebaseConfig.': 'Firebase is not configured: orders only live in this browser. Paste your credentials into firebaseConfig.',
+  'Conectando con Firebase…': 'Connecting to Firebase…',
+  'Conectado a Firebase: los pedidos se sincronizan en tiempo real entre dispositivos.': 'Connected to Firebase: orders sync in real time between devices.',
+  'Sin conexión con Firebase: se muestran los últimos datos guardados.': 'No connection to Firebase: showing the last saved data.',
+  'No se ha podido conectar con Firebase.': 'Could not connect to Firebase.',
+  'No se ha podido iniciar Firebase (revisa firebaseConfig): funcionando en modo local.': 'Could not start Firebase (check firebaseConfig): running in local mode.',
+  'Firebase ha rechazado el acceso. Revisa las reglas de Firestore.': 'Firebase denied access. Check the Firestore rules.',
+  'Firebase ha rechazado las credenciales. Revisa firebaseConfig.': 'Firebase rejected the credentials. Check firebaseConfig.',
+  'No se encuentra la base de datos de Firestore. Créala en la consola de Firebase.': 'Firestore database not found. Create it in the Firebase console.',
+  'No hay conexión con Firebase.': 'No connection to Firebase.',
+  'Firestore no está disponible en este navegador o falta un índice.': 'Firestore is not available in this browser or an index is missing.',
+
+  /* Avisos y errores */
+  'Hemos ajustado tu carrito: otro pasajero se ha llevado las últimas unidades de algún artículo.': 'We adjusted your cart: another passenger took the last units of an item.',
+  'No se ha podido actualizar el pedido {num}. Inténtalo de nuevo.': 'Could not update order {num}. Please try again.',
+  'No se han podido sumar los puntos Plus. Inténtalo de nuevo.': 'Could not add Plus points. Please try again.',
+  'No se ha podido cambiar el Modo Alta Demanda.': 'Could not change High Demand Mode.',
+  'No se ha podido reiniciar la demo. Comprueba tu conexión.': 'Could not reset the demo. Check your connection.',
+  'Pulsa de nuevo para borrar los pedidos de TODOS los dispositivos.': 'Press again to delete orders from ALL devices.',
+  'No se ha podido enviar el pedido. Inténtalo de nuevo.': 'Could not send the order. Please try again.',
+  'Sin conexión con el servidor: no se ha enviado el pedido. Comprueba tu conexión e inténtalo de nuevo.': 'No server connection: the order was not sent. Check your connection and try again.',
+  'Firebase ha rechazado el pedido. Revisa las reglas de Firestore.': 'Firebase rejected the order. Check the Firestore rules.',
+  'Tu carrito se ha quedado vacío. Revisa tu pedido.': 'Your cart is empty. Check your order.',
+  'Lo sentimos, «{nombre}» se ha agotado mientras pedías. Revisa tu carrito.': 'Sorry, "{nombre}" sold out while you were ordering. Check your cart.',
+  'No se ha podido cargar el catálogo.': 'Could not load the catalogue.',
+
+  /* Catálogo y carrito */
+  'Pide desde donde estés': 'Order from wherever you are',
+  'Elige, paga y recoge en la cafetería que prefieras. Sin colas y sin moverte hasta que esté listo.': 'Choose, pay and collect at your favourite café. No queues, no waiting.',
+  'Alta demanda en cafeterías:': 'High demand at cafés:',
+  'Los tiempos de espera son superiores a lo habitual.': 'Waiting times are longer than usual.',
+  'Prototipo · catálogo cargado desde CSV · pagos simulados · {modo}': 'Prototype · catalogue loaded from CSV · simulated payments · {modo}',
+  'pedidos sincronizados con Firebase': 'orders synced with Firebase',
+  'modo local (sin Firebase)': 'local mode (no Firebase)',
+  'Ver mi pedido': 'View my order',
+  'Ver mi pedido: {n} artículos, {total}': 'View my order: {n} items, {total}',
+  'Tu pedido': 'Your order',
+  'Paso 1 de 3 · Resumen': 'Step 1 of 3 · Summary',
+  'Elegir punto de recogida': 'Choose pickup point',
+  'Seguir pidiendo': 'Keep ordering',
+  'Tu carrito está vacío': 'Your cart is empty',
+  'Ver el catálogo': 'View catalogue',
+  'En el siguiente paso eliges en qué cafetería recoges tu pedido.': 'In the next step you choose which café to collect from.',
+  'Añadir {nombre} al carrito': 'Add {nombre} to cart',
+  'Añadir {nombre} al pedido': 'Add {nombre} to order',
+  'Quitar {nombre} del carrito': 'Remove {nombre} from cart',
+  'Completa tu menú': 'Complete your meal',
+  '¿Añades un Agua por {precio}?': 'Add a water for {precio}?',
+  'Recomendado para ti': 'Recommended for you',
+  'Basado en tu pedido y la hora': 'Based on your order and the time',
+  'Para acompañar tu café': 'To go with your coffee',
+  'Para completar tu menú': 'To complete your meal',
+  'Para picar con la cerveza': 'To snack with your beer',
+  'El acompañamiento perfecto': 'The perfect pairing',
+  'Un extra para tu oferta': 'An extra for your deal',
+  'Un extra para tu pedido': 'An extra for your order',
+  'Un clásico a esta hora': 'A classic at this time',
+  'Añadir {nombre} a las recomendaciones': 'Add {nombre} from recommendations',
+  'No hay recomendaciones disponibles.': 'No recommendations available.',
+
+  /* Recogida y mapa */
+  'Punto de recogida': 'Pickup point',
+  'Recogida en': 'Pickup at',
+  'Recogida en {nombre}': 'Pickup at {nombre}',
+  'Toca una cafetería en el plano para continuar': 'Tap a café on the map to continue',
+  'Continuar al pago': 'Continue to payment',
+  '¿Dónde recoges tu pedido?': 'Where will you collect your order?',
+  'Toca la cafetería del plano donde quieres recogerlo. Los tiempos dependen de los artículos que hay en cola.': 'Tap the café on the map where you want to collect it. Times depend on the items in the queue.',
+  'Alta demanda: los tiempos de espera se multiplican por {factor}.': 'High demand: waiting times are multiplied by {factor}.',
+  'Tiempo de espera': 'Waiting time',
+  'Leyenda de tiempos de espera': 'Waiting time legend',
+  'Baja': 'Low',
+  'Media': 'Medium',
+  'Alta': 'High',
+  '< 7 min': '< 7 min',
+  '7-14 min': '7-14 min',
+  '> 14 min': '> 14 min',
+  'Se actualiza cada minuto · última vez a las {hora}': 'Updates every minute · last at {hora}',
+  'Más rápida': 'Fastest',
+  'Plano del buque con las cafeterías de proa, centro y popa': 'Ship map with bow, centre and stern cafés',
+  'Proa': 'Bow',
+  'Centro': 'Centre',
+  'Popa': 'Stern',
+  'PROA': 'BOW',
+  'POPA': 'STERN',
+  'Cafetería Proa': 'Bow Café',
+  'Cafetería Centro': 'Centre Café',
+  'Cafetería Popa': 'Stern Café',
+  'Cubierta 6 · Zona de proa': 'Deck 6 · Bow area',
+  'Cubierta 6 · Zona central': 'Deck 6 · Central area',
+  'Cubierta 6 · Zona de popa': 'Deck 6 · Stern area',
+  '{nombre}, espera {n} minutos': '{nombre}, {n} minute wait',
+
+  /* Pago y seguimiento */
+  'Resumen y pago': 'Summary and payment',
+  'Elige cómo pagar': 'Choose how to pay',
+  'Pago simulado: es un prototipo y no se realiza ningún cargo.': 'Simulated payment: this is a prototype and no charge is made.',
+  'Sumando…': 'Adding…',
+  'Procesando pago…': 'Processing payment…',
+  'Enviando tu pedido a la cafetería…': 'Sending your order to the café…',
+  'Pagado con {metodo}': 'Paid with {metodo}',
+  'Recoge tu pedido en': 'Collect your order at',
+  'Estado de tu pedido': 'Order status',
+  'Pedido confirmado': 'Order confirmed',
+  '¡Pedido confirmado!': 'Order confirmed!',
+  'Hemos avisado a la cafetería': 'We have notified the café',
+  '¡Listo para recoger!': 'Ready for pickup!',
+  '¡Pedido {numero} listo para recoger en {ubicacion}!': 'Order {numero} is ready to collect at {ubicacion}!',
+  'Acércate a {ub} y di tu número {num}.': 'Go to {ub} and give your number {num}.',
+  'Acércate a {nombre} y di tu número {numero}.': 'Go to {nombre} and give your number {numero}.',
+  'Pedido entregado': 'Order delivered',
+  '¡Que aproveche!': 'Enjoy!',
+  'Hacer otro pedido': 'Place another order',
+  'En preparación': 'Preparing',
+  'Listo para recoger': 'Ready for pickup',
+  'Entregado': 'Delivered',
+  'La tripulación está preparando tu pedido.': 'The crew is preparing your order.',
+  'Dirígete a la cafetería.': 'Head to the café.',
+  'Disfruta tu pedido.': 'Enjoy your order.',
+
+  /* Pedidos activos */
+  'Pedidos activos': 'Active orders',
+  'Toca un pedido para ver su estado y su número de recogida': 'Tap an order to see its status and pickup number',
+  'No tienes pedidos activos': 'You have no active orders',
+  'Cuando hagas un pedido aparecerá aquí con su estado.': 'When you place an order it will appear here with its status.',
+  'Seguir mirando el catálogo': 'Keep browsing the catalogue',
+  '{n} Pedido Activo': '{n} Active Order',
+  '{n} Pedidos Activos': '{n} Active Orders',
+  '{n} pedido activo': '{n} active order',
+  '{n} pedidos activos': '{n} active orders',
+  'Ver mis pedidos': 'View my orders',
+  'Ver seguimiento del pedido {num}, {estado}': 'View order {num}, {estado}',
+  '{n} artículo': '{n} item',
+  '{n} artículos': '{n} items',
+
+  /* Fred. Olsen Plus */
+  '¿Eres cliente Fred. Olsen Plus?': 'Are you a Fred. Olsen Plus member?',
+  'Suma puntos con este pedido': 'Earn points with this order',
+  'Número de tarjeta Plus': 'Plus card number',
+  'Introduce el número de tu tarjeta Plus.': 'Enter your Plus card number.',
+  'Suma puntos': 'Add points',
+  'Con este pedido sumarías {puntos} puntos ({por} por cada 1 € gastado).': 'With this order you would earn {puntos} points ({por} per €1 spent).',
+  '¡Enhorabuena! Has sumado {puntos} puntos a tu cuenta Plus': 'Congratulations! You have added {puntos} points to your Plus account',
+  'Tarjeta ···· {fin} · {por} puntos por cada 1 € gastado': 'Card ···· {fin} · {por} points per €1 spent',
+
+  /* Tripulación */
+  'Panel de tripulación': 'Crew panel',
+  'Tripulación': 'Crew',
+  'Modo Alta Demanda': 'High Demand Mode',
+  'Activo': 'Active',
+  'Inactivo': 'Inactive',
+  'MODO ALTA DEMANDA ACTIVO · Prioriza los pedidos más antiguos': 'HIGH DEMAND MODE ACTIVE · Prioritise the oldest orders',
+  'Sin pedidos en preparación. Haz un pedido en la App Pasajero y aparecerá aquí.': 'No orders preparing. Place an order in the Passenger App and it will appear here.',
+  'Sin pedidos listos': 'No ready orders',
+  'Reiniciar demo': 'Reset demo',
+  '¿Seguro?': 'Sure?',
+  'Reiniciar demo (borra los pedidos de todos los dispositivos)': 'Reset demo (deletes orders from all devices)',
+  '{n} artículos en cola': '{n} items in queue',
+  'En Preparación': 'Preparing',
+  'Listos para Recoger': 'Ready for Pickup',
+  'Marcar como listo': 'Mark as ready',
+  'Entregar': 'Deliver',
+
+  /* Demo PC */
+  'Demo PC': 'PC demo',
+  'App cliente': 'Passenger app',
+  'Panel tripulación': 'Crew panel',
+  'Abrir app del pasajero': 'Open passenger app',
+  'Abrir panel de tripulación': 'Open crew panel',
+  'Esta es la vista que ve el cliente en su móvil': 'This is what the customer sees on their phone',
+};
+
+const I18nCtx = createContext(null);
+const useI18n = () => useContext(I18nCtx);
+
+function I18nProvider({ children }) {
+  const [idioma, setIdioma] = useState(() => {
+    try {
+      return localStorage.getItem('click-collect-idioma') === 'en' ? 'en' : 'es';
+    } catch (e) {
+      return 'es';
+    }
+  });
+
+  useEffect(() => {
+    document.documentElement.lang = idioma;
+    try {
+      localStorage.setItem('click-collect-idioma', idioma);
+    } catch (e) {
+      /* sin almacenamiento: el idioma dura esta sesión */
+    }
+  }, [idioma]);
+
+  const t = useCallback(
+    (texto, vars) => {
+      let salida = idioma === 'en' && TEXTOS_EN[texto] !== undefined ? TEXTOS_EN[texto] : texto;
+      if (vars) {
+        Object.keys(vars).forEach((k) => {
+          salida = salida.split(`{${k}}`).join(String(vars[k]));
+        });
+      }
+      return salida;
+    },
+    [idioma]
+  );
+
+  const eur = useCallback(
+    (n) => formatearEur(n, idioma),
+    [idioma]
+  );
+
+  const cambiarIdioma = useCallback(() => setIdioma((i) => (i === 'es' ? 'en' : 'es')), []);
+  const locale = idioma === 'en' ? 'en-GB' : 'es-ES';
+  const value = useMemo(
+    () => ({ idioma, locale, setIdioma, cambiarIdioma, t, eur }),
+    [idioma, locale, cambiarIdioma, t, eur]
+  );
+  return <I18nCtx.Provider value={value}>{children}</I18nCtx.Provider>;
+}
 const redondear = (n) => Math.round(n * 100) / 100;
 // Artículos (unidades, no pedidos) pendientes de preparar en una cafetería: SOLO pedidos en 'preparando'
 // ('listo' y 'entregado' ya no ocupan a la cocina).
@@ -333,6 +698,63 @@ function sugerenciaBebida(lineas, productos) {
   if (!hayComida || hayBebida) return null;
   const p = productos.find((x) => x.id === ID_BEBIDA_SUGERIDA);
   return p && p.stock_disponible > 0 ? p : null;
+}
+
+/* Recomendaciones locales (sin LLM): combinan el carrito, la hora del día,
+   las categorías y el stock. Devuelven hasta 3 productos con un motivo. */
+const FRANJAS_RECOMENDACION = [
+  { desde: 6, hasta: 11, cats: ['Cafés', 'Croissants', 'Bolleria'], motivo: 'Un clásico a esta hora' },
+  { desde: 11, hasta: 15, cats: ['Bocadillos', 'Sandwiches', 'Aguas', 'Refrescos Cola', 'Cervezas'], motivo: 'Para completar tu menú' },
+  { desde: 15, hasta: 19, cats: ['Cafés', 'Bolleria', 'Snacks'], motivo: 'Un clásico a esta hora' },
+  { desde: 19, hasta: 24, cats: ['Bocadillos', 'Sandwiches', 'Cervezas', 'Snacks'], motivo: 'Para completar tu menú' },
+  { desde: 0, hasta: 6, cats: ['Aguas', 'Snacks', 'Cafés'], motivo: 'Un clásico a esta hora' },
+];
+
+function recomendarProductos({ lineas, productos, ahora = Date.now() }) {
+  if (!lineas.length) return [];
+  const enCarrito = new Set(lineas.map((l) => l.id));
+  const cats = new Set(lineas.map((l) => l.categoria));
+  const disponibles = productos.filter((p) => p.stock_disponible > 0 && !enCarrito.has(p.id));
+  if (!disponibles.length) return [];
+
+  const hora = new Date(ahora).getHours();
+  const franja = FRANJAS_RECOMENDACION.find((f) => hora >= f.desde && hora < f.hasta) || FRANJAS_RECOMENDACION[0];
+  const hayComida = lineas.some((l) => CATEGORIAS_COMIDA.includes(l.categoria));
+  const hayBebida = lineas.some((l) => CATEGORIAS_CON_BEBIDA.includes(l.categoria));
+  const hayCafe = cats.has('Cafés');
+  const hayDulce = cats.has('Croissants') || cats.has('Bolleria');
+  const haySnack = cats.has('Snacks');
+  const hayCerveza = cats.has('Cervezas');
+  const bebidasHora = hora >= 12 ? ['Aguas', 'Refrescos Cola', 'Cervezas'] : ['Aguas', 'Refrescos Cola', 'Cafés'];
+
+  const reglas = [];
+  if (hayCafe && !hayDulce) reglas.push({ cats: ['Croissants', 'Bolleria'], motivo: 'Para acompañar tu café', peso: 100 });
+  if (hayComida && !hayBebida) reglas.push({ cats: bebidasHora, motivo: 'Para completar tu menú', peso: 120 });
+  if (hayCerveza && !haySnack) reglas.push({ cats: ['Snacks'], motivo: 'Para picar con la cerveza', peso: 90 });
+  if (hayDulce && !hayCafe) reglas.push({ cats: ['Cafés'], motivo: 'El acompañamiento perfecto', peso: 90 });
+  if (cats.has('Ofertas')) reglas.push({ cats: ['Snacks'], motivo: 'Un extra para tu oferta', peso: 60 });
+  if (hayComida && hayBebida && !haySnack && !hayDulce) {
+    reglas.push({ cats: ['Snacks', 'Bolleria'], motivo: 'Un extra para tu pedido', peso: 70 });
+  }
+  if (!hayComida) reglas.push({ cats: CATEGORIAS_COMIDA, motivo: 'Un clásico a esta hora', peso: 70 });
+  reglas.push({ cats: franja.cats, motivo: franja.motivo, peso: 50 });
+
+  const puntos = new Map();
+  reglas.forEach((r) => {
+    disponibles
+      .filter((p) => r.cats.includes(p.categoria))
+      .forEach((p) => {
+        const actual = puntos.get(p.id) || { producto: p, puntos: 0, motivos: [] };
+        actual.puntos += r.peso;
+        if (!actual.motivos.includes(r.motivo)) actual.motivos.push(r.motivo);
+        puntos.set(p.id, actual);
+      });
+  });
+
+  return [...puntos.values()]
+    .sort((a, b) => b.puntos - a.puntos || b.producto.stock_disponible - a.producto.stock_disponible)
+    .slice(0, 3)
+    .map((x) => ({ ...x.producto, motivo: x.motivos[0] }));
 }
 
 /* -------------------------------------------------------------------
@@ -593,7 +1015,7 @@ function reducer(state, action) {
         });
         if (cambio) {
           carrito = ajustado;
-          aviso = { texto: 'Hemos ajustado tu carrito: otro pasajero se ha llevado las últimas unidades de algún artículo.', tono: 'info' };
+          aviso = { clave: 'Hemos ajustado tu carrito: otro pasajero se ha llevado las últimas unidades de algún artículo.', tono: 'info' };
         }
       }
       return { ...state, pedidos: action.pedidos, productos, carrito, aviso, cargado: action.cargado === undefined ? state.cargado : action.cargado };
@@ -675,7 +1097,12 @@ function StoreProvider({ children }) {
               const ub = UBICACIONES_INICIALES.find((u) => u.id === c.pedido.ubicacionId);
               emitir({
                 type: 'NOTIFICAR',
-                notificacion: { numero: c.pedido.numero, estado: 'listo', texto: `¡Pedido ${numeroPedido(c.pedido.numero)} listo para recoger en ${ub.nombre}!` },
+                notificacion: {
+                  numero: c.pedido.numero,
+                  estado: 'listo',
+                  clave: '¡Pedido {numero} listo para recoger en {ubicacion}!',
+                  vars: { numero: numeroPedido(c.pedido.numero), ubicacionId: ub.id },
+                },
               });
             }
           });
@@ -715,9 +1142,23 @@ function StoreProvider({ children }) {
           return p ? { id: p.id, nombre: p.nombre, precio: p.precio, cantidad, stock: p.stock_disponible } : null;
         })
         .filter((i) => i && i.cantidad > 0);
-      if (!items.length) throw Object.assign(new Error('Tu carrito se ha quedado vacío. Revisa tu pedido.'), { code: 'sin-stock' });
+      if (!items.length) {
+        throw Object.assign(new Error('Tu carrito se ha quedado vacío. Revisa tu pedido.'), {
+          code: 'sin-stock',
+          clave: 'Tu carrito se ha quedado vacío. Revisa tu pedido.',
+        });
+      }
       const agotado = items.find((i) => i.cantidad > i.stock); // otro dispositivo pudo llevarse las últimas unidades
-      if (agotado) throw Object.assign(new Error(`Lo sentimos, «${agotado.nombre}» se ha agotado mientras pedías. Revisa tu carrito.`), { code: 'sin-stock' });
+      if (agotado) {
+        throw Object.assign(
+          new Error(`Lo sentimos, «${agotado.nombre}» se ha agotado mientras pedías. Revisa tu carrito.`),
+          {
+            code: 'sin-stock',
+            clave: 'Lo sentimos, «{nombre}» se ha agotado mientras pedías. Revisa tu carrito.',
+            productoId: agotado.id,
+          }
+        );
+      }
       const lineas = items.map(({ stock, ...i }) => i);
       const total = redondear(lineas.reduce((t, i) => t + i.precio * i.cantidad, 0));
       confirmando.current = true;
@@ -747,7 +1188,14 @@ function StoreProvider({ children }) {
         await backend.avanzarPedido(numero, sig);
         return true;
       } catch (e) {
-        dispatch0({ type: 'AVISAR', aviso: { texto: `No se ha podido actualizar el pedido ${numeroPedido(numero)}. Inténtalo de nuevo.`, tono: 'error' } });
+        dispatch0({
+          type: 'AVISAR',
+          aviso: {
+            clave: 'No se ha podido actualizar el pedido {num}. Inténtalo de nuevo.',
+            vars: { num: numeroPedido(numero) },
+            tono: 'error',
+          },
+        });
         return false;
       } finally {
         enVuelo.current.delete(clave);
@@ -763,7 +1211,7 @@ function StoreProvider({ children }) {
         await backend.sumarPuntos(numero, { puntos: puntosPlusDe(p.total), tarjetaFin: limpia.slice(-4) });
         return true;
       } catch (e) {
-        dispatch0({ type: 'AVISAR', aviso: { texto: 'No se han podido sumar los puntos Plus. Inténtalo de nuevo.', tono: 'error' } });
+        dispatch0({ type: 'AVISAR', aviso: { clave: 'No se han podido sumar los puntos Plus. Inténtalo de nuevo.', tono: 'error' } });
         return false;
       }
     },
@@ -773,7 +1221,7 @@ function StoreProvider({ children }) {
       try {
         await backend.fijarAltaDemanda(!stateRef.current.altaDemanda);
       } catch (e) {
-        dispatch0({ type: 'AVISAR', aviso: { texto: 'No se ha podido cambiar el Modo Alta Demanda.', tono: 'error' } });
+        dispatch0({ type: 'AVISAR', aviso: { clave: 'No se ha podido cambiar el Modo Alta Demanda.', tono: 'error' } });
       }
     },
 
@@ -787,7 +1235,7 @@ function StoreProvider({ children }) {
         dispatch0({ type: 'LIMPIAR_NOTIFICACIONES' });
         return true;
       } catch (e) {
-        dispatch0({ type: 'AVISAR', aviso: { texto: 'No se ha podido reiniciar la demo. Comprueba tu conexión.', tono: 'error' } });
+        dispatch0({ type: 'AVISAR', aviso: { clave: 'No se ha podido reiniciar la demo. Comprueba tu conexión.', tono: 'error' } });
         return false;
       }
     },
@@ -889,6 +1337,7 @@ function ChipEspera({ min, tam = 'md' }) {
 }
 
 function ImagenProducto({ producto, size = 32 }) {
+  const { idioma } = useI18n();
   const url = producto.imagen_url || '';
   if (url.startsWith('lucide:')) {
     // acepta "lucide:cup-soda" y también "lucide:CupSoda"
@@ -896,21 +1345,22 @@ function ImagenProducto({ producto, size = 32 }) {
     const Ico = ICONOS_LUCIDE[clave] || Utensils;
     return <Ico size={size} strokeWidth={1.75} />;
   }
-  return <img src={url} alt={producto.nombre} className="h-full w-full object-cover" />;
+  return <img src={url} alt={nombreProducto(producto, idioma)} className="h-full w-full object-cover" />;
 }
 
 function Stepper({ cantidad, onDec, onInc, incDisabled }) {
+  const { t } = useI18n();
   const b =
     'flex h-8 w-8 items-center justify-center rounded-full bg-fo-blue text-white transition hover:bg-[#00408F] disabled:cursor-not-allowed disabled:bg-[#E3E3E3] disabled:text-[#9A9A9A]';
   return (
     <div className="inline-flex items-center gap-3">
-      <button type="button" className={b} onClick={onDec} aria-label="Quitar uno">
+      <button type="button" className={b} onClick={onDec} aria-label={t('Quitar uno')}>
         <Minus size={16} strokeWidth={2.5} />
       </button>
       <span className="min-w-[1.25rem] text-center text-base font-bold text-fo-blue" aria-live="polite">
         {cantidad}
       </span>
-      <button type="button" className={b} onClick={onInc} disabled={incDisabled} aria-label="Añadir uno más">
+      <button type="button" className={b} onClick={onInc} disabled={incDisabled} aria-label={t('Añadir uno más')}>
         <Plus size={16} strokeWidth={2.5} />
       </button>
     </div>
@@ -919,9 +1369,10 @@ function Stepper({ cantidad, onDec, onInc, incDisabled }) {
 
 // Indicador de pasos (círculos amarillos de 30 px, como el registro del área de usuario)
 function Pasos({ actual }) {
-  const pasos = ['Resumen', 'Recogida', 'Pago'];
+  const { t } = useI18n();
+  const pasos = [t('Resumen'), t('Recogida'), t('Pago')];
   return (
-    <ol className="flex shrink-0 items-center border-b border-fo-line bg-white px-5 py-3" aria-label="Progreso del pedido">
+    <ol className="flex shrink-0 items-center border-b border-fo-line bg-white px-5 py-3" aria-label={t('Progreso del pedido')}>
       {pasos.map((t, i) => {
         const n = i + 1;
         const hecho = n < actual;
@@ -948,10 +1399,11 @@ function Pasos({ actual }) {
 
 // Pantalla completa dentro del "móvil" (cabecera azul + cuerpo con scroll + pie fijo)
 function Pantalla({ titulo, onBack, paso, children, footer }) {
+  const { t } = useI18n();
   return (
     <section className="fo-slide-in absolute inset-0 z-20 flex flex-col bg-fo-ice" aria-label={titulo}>
       <div className="flex shrink-0 items-center gap-2 bg-fo-blue px-3 py-3 text-white">
-        <button type="button" onClick={onBack} aria-label="Volver" className="flex h-9 w-9 items-center justify-center rounded-full transition hover:bg-white/10">
+        <button type="button" onClick={onBack} aria-label={t('Volver')} className="flex h-9 w-9 items-center justify-center rounded-full transition hover:bg-white/10">
           <ChevronLeft size={22} />
         </button>
         <h2 className="text-base font-bold">{titulo}</h2>
@@ -967,6 +1419,7 @@ function Pantalla({ titulo, onBack, paso, children, footer }) {
 
 // Hoja inferior (modal móvil): overlay rgba(48,48,48,.5) + radio 1.25rem arriba
 function HojaInferior({ titulo, subtitulo, onClose, children, footer, icono: Icono = ShoppingBag }) {
+  const { t } = useI18n();
   return (
     <div className="absolute inset-0 z-30" role="dialog" aria-modal="true" aria-label={titulo}>
       <div className="fo-fade-in absolute inset-0 bg-[rgba(48,48,48,0.5)]" onClick={onClose} />
@@ -978,7 +1431,7 @@ function HojaInferior({ titulo, subtitulo, onClose, children, footer, icono: Ico
             </h2>
             {subtitulo ? <p className="mt-0.5 text-[13px] text-fo-grey">{subtitulo}</p> : null}
           </div>
-          <button type="button" onClick={onClose} aria-label="Cerrar" className="flex h-9 w-9 items-center justify-center rounded-full text-fo-blue transition hover:bg-fo-ice">
+          <button type="button" onClick={onClose} aria-label={t('Cerrar')} className="flex h-9 w-9 items-center justify-center rounded-full text-fo-blue transition hover:bg-fo-ice">
             <X size={22} />
           </button>
         </div>
@@ -1001,24 +1454,80 @@ const INFO_CONEXION = {
 // Indicador compacto (punto + texto en pantallas anchas) para la barra global
 function ChipConexion() {
   const { state } = useStore();
+  const { t } = useI18n();
   const c = INFO_CONEXION[state.conexion] || INFO_CONEXION.local;
   return (
     <span
       role="status"
       data-conexion={state.conexion}
-      title={state.conexion === 'local' && errorInicioFirebase ? 'No se ha podido iniciar Firebase (revisa firebaseConfig): funcionando en modo local.' : c.titulo}
-      aria-label={`Conexión: ${c.texto}`}
+      title={state.conexion === 'local' && errorInicioFirebase ? t('No se ha podido iniciar Firebase (revisa firebaseConfig): funcionando en modo local.') : t(c.titulo)}
+      aria-label={t('Conexión: {texto}', { texto: t(c.texto) })}
       className="flex shrink-0 items-center gap-1.5 rounded-full px-1 py-1 text-[11px] font-bold text-white/90 max-[359px]:hidden sm:bg-white/10 sm:px-2"
     >
       <span className={`h-2 w-2 rounded-full ${c.punto}`} />
-      <span className="hidden md:inline">{c.texto}</span>
+      <span className="hidden md:inline">{t(c.texto)}</span>
     </span>
+  );
+}
+
+// Selector de idioma: círculo compacto que alterna ES / EN
+function BotonIdioma({ className = '' }) {
+  const { idioma, cambiarIdioma, t } = useI18n();
+  return (
+    <button
+      type="button"
+      onClick={cambiarIdioma}
+      aria-label={t('Cambiar idioma')}
+      title={t('Cambiar idioma')}
+      data-btn="idioma"
+      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-[11px] font-extrabold tracking-wide text-white transition hover:bg-white/20 ${className}`}
+    >
+      {idioma === 'es' ? 'ES' : 'EN'}
+    </button>
+  );
+}
+
+// Reinicio de la demo (solo panel de tripulación). Con Firebase pide confirmación.
+function BotonReiniciar() {
+  const { dispatch, modo } = useStore();
+  const { t } = useI18n();
+  const [confirma, setConfirma] = useState(false);
+  useEffect(() => {
+    if (!confirma) return undefined;
+    const timer = setTimeout(() => setConfirma(false), 4000);
+    return () => clearTimeout(timer);
+  }, [confirma]);
+
+  const reiniciar = async () => {
+    if (modo === 'firebase' && !confirma) {
+      setConfirma(true);
+      dispatch({ type: 'AVISAR', aviso: { clave: 'Pulsa de nuevo para borrar los pedidos de TODOS los dispositivos.', tono: 'info' } });
+      return;
+    }
+    setConfirma(false);
+    await dispatch({ type: 'REINICIAR' });
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={reiniciar}
+      className={`flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-semibold transition ${
+        confirma ? 'bg-fo-red text-white' : 'text-white/80 hover:bg-white/10'
+      }`}
+      title={t('Reiniciar demo (borra los pedidos de todos los dispositivos)')}
+      data-btn="reiniciar"
+    >
+      <RotateCcw size={15} />
+      <span className={confirma ? 'inline' : 'hidden md:inline'}>{confirma ? t('¿Seguro?') : t('Reiniciar demo')}</span>
+    </button>
   );
 }
 
 // Pantalla de carga mientras llega la primera lectura de Firestore (o si no se puede conectar)
 function PantallaCarga({ marco = false }) {
   const { state, reintentar, modo } = useStore();
+  const { t } = useI18n();
   const { cargado, conexion, errorConexion } = state;
   if (modo !== 'firebase' || cargado) return null;
   const fallo = conexion === 'error' || conexion === 'sin-conexion';
@@ -1031,18 +1540,20 @@ function PantallaCarga({ marco = false }) {
     >
       {fallo ? <CloudOff size={46} className="text-fo-red" /> : <Loader2 size={46} className="animate-spin text-fo-blue" />}
       <div>
-        <p className="text-xl font-bold text-fo-blue">{conexion === 'error' ? 'No se puede conectar' : fallo ? 'Sin conexión' : 'Conectando con Firebase…'}</p>
+        <p className="text-xl font-bold text-fo-blue">
+          {conexion === 'error' ? t('No se puede conectar') : fallo ? t('Sin conexión') : t('Conectando con Firebase…')}
+        </p>
         <p className="mt-1 text-sm text-fo-grey">
           {conexion === 'error'
-            ? errorConexion
+            ? t(errorConexion)
             : fallo
-              ? 'No hay conexión con el servidor. Comprueba tu conexión a internet.'
-              : 'Sincronizando los pedidos en tiempo real'}
+              ? t('No hay conexión con el servidor. Comprueba tu conexión a internet.')
+              : t('Sincronizando los pedidos en tiempo real')}
         </p>
       </div>
       {fallo ? (
         <Btn onClick={reintentar}>
-          <RefreshCw size={16} /> Reintentar
+          <RefreshCw size={16} /> {t('Reintentar')}
         </Btn>
       ) : null}
     </div>
@@ -1052,16 +1563,17 @@ function PantallaCarga({ marco = false }) {
 // Franja de aviso cuando se pierde la conexión con datos ya cargados
 function BandaConexion() {
   const { state, reintentar, modo } = useStore();
+  const { t } = useI18n();
   const { cargado, conexion, errorConexion } = state;
   if (modo !== 'firebase' || !cargado || (conexion !== 'sin-conexion' && conexion !== 'error')) return null;
   return (
     <div role="status" data-banda="conexion" className="flex shrink-0 items-center gap-2 bg-fo-red px-4 py-1.5 text-xs font-semibold text-white">
       <CloudOff size={14} className="shrink-0" />
       <span className="min-w-0 flex-1 leading-snug">
-        {conexion === 'error' ? errorConexion : 'Sin conexión con el servidor. Mostrando los últimos datos guardados.'}
+        {conexion === 'error' ? t(errorConexion) : t('Sin conexión con el servidor. Mostrando los últimos datos guardados.')}
       </span>
       <button type="button" onClick={reintentar} className="shrink-0 rounded-md bg-white/20 px-2 py-0.5 font-bold transition hover:bg-white/30">
-        Reintentar
+        {t('Reintentar')}
       </button>
     </div>
   );
@@ -1070,11 +1582,12 @@ function BandaConexion() {
 // Aviso global (errores de escritura, carrito ajustado…): se cierra solo a los 6 s o al tocarlo
 function AvisoGlobal() {
   const { state, dispatch } = useStore();
+  const { t } = useI18n();
   const aviso = state.aviso;
   useEffect(() => {
     if (!aviso) return undefined;
-    const t = setTimeout(() => dispatch({ type: 'CERRAR_AVISO' }), AVISO_MS);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => dispatch({ type: 'CERRAR_AVISO' }), AVISO_MS);
+    return () => clearTimeout(timer);
   }, [aviso, dispatch]);
   if (!aviso) return null;
   const error = aviso.tono === 'error';
@@ -1088,7 +1601,7 @@ function AvisoGlobal() {
         className={`fo-toast-in pointer-events-auto flex w-full max-w-md items-start gap-2.5 rounded-lg p-3 text-left text-sm font-bold text-white shadow-[0_8px_20px_rgba(0,0,0,0.25)] ${error ? 'bg-fo-red' : 'bg-fo-blue'}`}
       >
         {error ? <TriangleAlert size={18} className="mt-px shrink-0 text-fo-yellow" /> : <Info size={18} className="mt-px shrink-0 text-fo-yellow" />}
-        <span className="min-w-0 flex-1 leading-snug">{aviso.texto}</span>
+        <span className="min-w-0 flex-1 leading-snug">{aviso.clave ? t(aviso.clave, aviso.vars) : t(aviso.texto)}</span>
         <X size={16} className="mt-0.5 shrink-0 opacity-70" />
       </button>
     </div>
@@ -1110,20 +1623,21 @@ const FILAS_BUTACAS = [154, 174, 280, 300];
 const COLUMNAS_BUTACAS = [64, 82, 100, 118, 168, 186, 204, 222];
 
 function MapaBuque({ ubicaciones, esperas, masRapida, seleccion, onSelect }) {
+  const { t, idioma } = useI18n();
   const casco =
     'M150 12 C214 46 260 110 260 186 L260 402 Q260 428 234 428 L66 428 Q40 428 40 402 L40 186 C40 110 86 46 150 12 Z';
 
   return (
     <div className="relative mx-auto w-full max-w-[300px] select-none" style={{ aspectRatio: '300 / 440' }}>
-      <svg viewBox="0 0 300 440" className="absolute inset-0 h-full w-full" role="img" aria-label="Plano del buque con las cafeterías de proa, centro y popa">
+      <svg viewBox="0 0 300 440" className="absolute inset-0 h-full w-full" role="img" aria-label={t('Plano del buque con las cafeterías de proa, centro y popa')}>
         <rect width="300" height="440" rx="18" fill="#E5EFF6" />
         {/* estela */}
         <path d="M14 400 q10 -8 20 0 t20 0 M246 400 q10 -8 20 0 t20 0 M14 40 q10 -8 20 0 t20 0 M246 40 q10 -8 20 0 t20 0" fill="none" stroke="#9AB6D1" strokeWidth="2" strokeLinecap="round" opacity=".6" />
         {/* casco y cubierta */}
         <path d={casco} fill="#FFFFFF" stroke="#002F6C" strokeWidth="3" />
         <path d={casco} fill="#F4F7FF" stroke="#E4E4E4" strokeWidth="1.5" transform="translate(150 220) scale(.93) translate(-150 -220)" />
-        <text x="150" y="62" textAnchor="middle" fontSize="9" fontWeight="700" letterSpacing="3" fill="#535353">PROA</text>
-        <text x="150" y="404" textAnchor="middle" fontSize="9" fontWeight="700" letterSpacing="3" fill="#535353">POPA</text>
+        <text x="150" y="62" textAnchor="middle" fontSize="9" fontWeight="700" letterSpacing="3" fill="#535353">{t('PROA')}</text>
+        <text x="150" y="404" textAnchor="middle" fontSize="9" fontWeight="700" letterSpacing="3" fill="#535353">{t('POPA')}</text>
         {/* butacas decorativas */}
         {FILAS_BUTACAS.map((y) =>
           COLUMNAS_BUTACAS.map((x) => <rect key={`${y}-${x}`} x={x} y={y} width="14" height="11" rx="3.5" fill="#D0D8E8" />)
@@ -1141,18 +1655,18 @@ function MapaBuque({ ubicaciones, esperas, masRapida, seleccion, onSelect }) {
             key={ub.id}
             type="button"
             aria-pressed={sel}
-            aria-label={`${ub.nombre}, espera ${espera} minutos`}
+            aria-label={t('{nombre}, espera {n} minutos', { nombre: nombreUbicacion(ub, idioma), n: espera })}
             onClick={() => onSelect(ub.id)}
             style={{ left: pos.left, top: pos.top, width: pos.width, height: pos.height }}
             className={`absolute flex flex-col items-center justify-center gap-1 rounded-lg border-2 border-fo-blue text-center text-fo-blue transition-all duration-200 ${
               sel ? 'z-10 scale-105 bg-fo-yellow shadow-lg' : 'bg-white shadow-sm hover:scale-[1.03] hover:bg-fo-ice'
             }`}
           >
-            <span className="text-[11px] font-bold leading-tight">{ub.nombre}</span>
+            <span className="text-[11px] font-bold leading-tight">{nombreUbicacion(ub, idioma)}</span>
             <ChipEspera min={espera} tam="sm" />
             {masRapida === ub.id ? (
               <span className="absolute -top-2.5 left-2 rounded-full bg-fo-blue px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-fo-yellow">
-                Más rápida
+                {t('Más rápida')}
               </span>
             ) : null}
             {sel ? (
@@ -1171,18 +1685,20 @@ function MapaBuque({ ubicaciones, esperas, masRapida, seleccion, onSelect }) {
    6. VISTA A — APP DEL PASAJERO
    ------------------------------------------------------------------- */
 function ProductoCard({ p, cantidad, onAdd, onDec }) {
+  const { t, eur, idioma } = useI18n();
   const agotado = p.stock_disponible <= 0;
   const pocas = !agotado && p.stock_disponible <= 5;
   const enMaximo = cantidad >= p.stock_disponible;
+  const nombre = nombreProducto(p, idioma);
   return (
     <article className="relative rounded-card border border-fo-line bg-white p-3 shadow-[1px_2px_4px_0_rgba(187,187,187,0.5)]">
       {agotado ? (
         <span className="absolute right-3 top-3 z-10">
-          <Pill tone="grey">Agotado</Pill>
+          <Pill tone="grey">{t('Agotado')}</Pill>
         </span>
       ) : pocas ? (
         <span className="absolute right-3 top-3 z-10">
-          <Pill tone="cream">Últimas {p.stock_disponible}</Pill>
+          <Pill tone="cream">{t('Últimas {n}', { n: p.stock_disponible })}</Pill>
         </span>
       ) : null}
       <div className={`flex gap-3 ${agotado ? 'opacity-50 grayscale' : ''}`}>
@@ -1190,7 +1706,7 @@ function ProductoCard({ p, cantidad, onAdd, onDec }) {
           <ImagenProducto producto={p} />
         </div>
         <div className="min-w-0 flex-1">
-          <h3 className={`text-base font-semibold leading-tight text-fo-blue ${agotado || pocas ? 'pr-20' : ''}`}>{p.nombre}</h3>
+          <h3 className={`text-base font-semibold leading-tight text-fo-blue ${agotado || pocas ? 'pr-20' : ''}`}>{nombre}</h3>
           <div className="mt-2.5 flex items-center justify-between gap-2">
             <span className="text-lg font-bold text-fo-blue">{eur(p.precio)}</span>
             {cantidad > 0 ? (
@@ -1200,11 +1716,11 @@ function ProductoCard({ p, cantidad, onAdd, onDec }) {
                 size="xs"
                 onClick={onAdd}
                 disabled={agotado}
-                aria-label={`Añadir ${p.nombre} al carrito`}
+                aria-label={t('Añadir {nombre} al carrito', { nombre })}
                 className="w-fit shrink-0"
                 data-btn="anadir"
               >
-                <Plus size={14} strokeWidth={2.5} /> Añadir al carrito
+                <Plus size={14} strokeWidth={2.5} /> {t('Añadir al carrito')}
               </Btn>
             )}
           </div>
@@ -1222,10 +1738,11 @@ const PASOS_SEGUIMIENTO = [
 ];
 
 function SeguimientoPedido({ pedido }) {
+  const { t } = useI18n();
   const idx = ESTADOS.indexOf(pedido.estado); // preparando 0 · listo 1 · entregado 2
   const ultimo = PASOS_SEGUIMIENTO.length - 1;
   return (
-    <ol className="space-y-0" aria-label="Fases del pedido">
+    <ol className="space-y-0" aria-label={t('Fases del pedido')}>
       {PASOS_SEGUIMIENTO.map((paso, i) => {
         // "Entregado" es el cierre: cuando llega, las tres fases quedan completadas
         const hecho = idx > i || pedido.estado === 'entregado';
@@ -1249,8 +1766,8 @@ function SeguimientoPedido({ pedido }) {
               {i < ultimo ? <span className={`my-1 w-[2px] flex-1 ${hecho ? 'bg-fo-blue' : 'bg-[#E3E3E3]'}`} style={{ minHeight: 18 }} /> : null}
             </div>
             <div className="pb-4 pt-1.5">
-              <p className={`text-[15px] font-semibold leading-tight ${hecho || activo ? 'text-fo-blue' : 'text-[#9A9A9A]'}`}>{paso.titulo}</p>
-              <p className={`text-[13px] ${hecho || activo ? 'text-fo-grey' : 'text-[#B5B5B5]'}`}>{paso.texto}</p>
+              <p className={`text-[15px] font-semibold leading-tight ${hecho || activo ? 'text-fo-blue' : 'text-[#9A9A9A]'}`}>{t(paso.titulo)}</p>
+              <p className={`text-[13px] ${hecho || activo ? 'text-fo-grey' : 'text-[#B5B5B5]'}`}>{t(paso.texto)}</p>
             </div>
           </li>
         );
@@ -1262,6 +1779,7 @@ function SeguimientoPedido({ pedido }) {
 /* Fred. Olsen Plus · puntos post-compra (sin descuentos: 10 puntos por cada 1 € del pedido) */
 function BloquePuntosPlus({ pedido }) {
   const { dispatch } = useStore();
+  const { t } = useI18n();
   const [tarjeta, setTarjeta] = useState('');
   const [error, setError] = useState('');
   const [enviando, setEnviando] = useState(false);
@@ -1288,9 +1806,9 @@ function BloquePuntosPlus({ pedido }) {
           <Award size={26} />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="font-bold leading-snug text-fo-blue">¡Enhorabuena! Has sumado {puntos} puntos a tu cuenta Plus</p>
+          <p className="font-bold leading-snug text-fo-blue">{t('¡Enhorabuena! Has sumado {puntos} puntos a tu cuenta Plus', { puntos })}</p>
           <p className="mt-0.5 text-xs text-fo-grey">
-            Tarjeta ···· {tarjetaFin} · {PUNTOS_PLUS_POR_EURO} puntos por cada 1 € gastado
+            {t('Tarjeta ···· {fin} · {por} puntos por cada 1 € gastado', { fin: tarjetaFin, por: PUNTOS_PLUS_POR_EURO })}
           </p>
         </div>
       </div>
@@ -1300,12 +1818,12 @@ function BloquePuntosPlus({ pedido }) {
   return (
     <form onSubmit={sumar} noValidate className="rounded-card border border-fo-line bg-white p-4" data-plus="formulario">
       <h3 className="flex items-center gap-2 font-bold text-fo-blue">
-        <Award size={18} /> ¿Eres cliente Fred. Olsen Plus?
+        <Award size={18} /> {t('¿Eres cliente Fred. Olsen Plus?')}
       </h3>
-      <p className="mt-0.5 text-[13px] text-fo-grey">Suma puntos con este pedido</p>
+      <p className="mt-0.5 text-[13px] text-fo-grey">{t('Suma puntos con este pedido')}</p>
       <div className="mt-3 flex gap-2">
         <label htmlFor={idCampo} className="sr-only">
-          Número de tarjeta Plus
+          {t('Número de tarjeta Plus')}
         </label>
         <input
           id={idCampo}
@@ -1317,7 +1835,7 @@ function BloquePuntosPlus({ pedido }) {
             setTarjeta(e.target.value);
             if (error) setError('');
           }}
-          placeholder="Número de tarjeta Plus"
+          placeholder={t('Número de tarjeta Plus')}
           aria-invalid={error ? 'true' : 'false'}
           aria-describedby={`${idCampo}-info`}
           className={`min-w-0 flex-1 rounded-btn border bg-white px-3 py-2.5 text-[15px] text-fo-blue placeholder:text-[#9A9A9A] focus:outline-none focus:ring-2 focus:ring-fo-blue/30 ${
@@ -1325,18 +1843,24 @@ function BloquePuntosPlus({ pedido }) {
           }`}
         />
         <Btn type="submit" size="sm" disabled={enviando}>
-          {enviando ? 'Sumando…' : 'Suma puntos'}
+          {enviando ? t('Sumando…') : t('Suma puntos')}
         </Btn>
       </div>
       <p id={`${idCampo}-info`} className={`mt-2 text-xs ${error ? 'font-semibold text-fo-red' : 'text-fo-grey'}`} aria-live="polite">
-        {error || `Con este pedido sumarías ${puntosPlusDe(pedido.total)} puntos (${PUNTOS_PLUS_POR_EURO} por cada 1 € gastado).`}
+        {error
+          ? t(error)
+          : t('Con este pedido sumarías {puntos} puntos ({por} por cada 1 € gastado).', {
+              puntos: puntosPlusDe(pedido.total),
+              por: PUNTOS_PLUS_POR_EURO,
+            })}
       </p>
     </form>
   );
 }
 
-function AppPasajero({ visible }) {
+function AppPasajero({ visible, demo = false }) {
   const { state, dispatch, clienteId, modo } = useStore();
+  const { t, eur, idioma, locale } = useI18n();
   const { productos, ubicaciones, carrito, pedidos, notificaciones, altaDemanda } = state;
 
   const [fase, setFase] = useState('catalogo'); // catalogo | carrito | mapa | pago | confirmado
@@ -1376,13 +1900,17 @@ function AppPasajero({ visible }) {
   );
   const totalItems = lineas.reduce((s, l) => s + l.cantidad, 0);
   const total = redondear(lineas.reduce((s, l) => s + l.cantidad * l.precio, 0));
-  const bebidaSugerida = useMemo(() => sugerenciaBebida(lineas, productos), [lineas, productos]);
   // Esperas por cafetería (modelo de colas). Se recalculan al cambiar los pedidos / la alta demanda y, además,
   // a la fuerza cada 60 s con el temporizador de useRefrescoEsperas.
   const refresco = useRefrescoEsperas();
   const esperas = useMemo(
     () => Object.fromEntries(ubicaciones.map((u) => [u.id, esperaDe(u, pedidos, altaDemanda)])),
     [ubicaciones, pedidos, altaDemanda, refresco.tick]
+  );
+  // Recomendaciones locales para el carrito: carrito + hora + stock + categorías.
+  const recomendaciones = useMemo(
+    () => recomendarProductos({ lineas, productos, ahora: refresco.hora }),
+    [lineas, productos, refresco.hora]
   );
   const ubElegida = ubicaciones.find((u) => u.id === ubicacionId) || null;
   const masRapida = useMemo(() => {
@@ -1420,8 +1948,8 @@ function AppPasajero({ visible }) {
   }, [notificaciones.length]);
   useEffect(() => {
     if (!toast || !visible) return undefined;
-    const t = setTimeout(() => setToast(null), 6000);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setToast(null), 6000);
+    return () => clearTimeout(timer);
   }, [toast, visible]);
 
   const irA = (nombre) => {
@@ -1460,7 +1988,12 @@ function AppPasajero({ visible }) {
       } catch (err) {
         if (!montado.current) return;
         if (err && err.code === 'sin-stock') {
-          dispatch({ type: 'AVISAR', aviso: { texto: err.message, tono: 'error' } });
+          const vars = {};
+          if (err.productoId) {
+            const prod = productos.find((p) => p.id === err.productoId);
+            if (prod) vars.nombre = nombreProducto(prod, idioma);
+          }
+          dispatch({ type: 'AVISAR', aviso: { clave: err.clave || err.message, vars, tono: 'error' } });
           setFase('carrito');
         } else {
           setErrorPago(mensajeErrorEscritura(err)); // el carrito se conserva: se puede reintentar
@@ -1478,35 +2011,9 @@ function AppPasajero({ visible }) {
 
   return (
     <div className="relative flex h-full flex-col overflow-hidden bg-fo-ice">
-      {/* Barra superior fija: pedidos activos del pasajero (siempre visible, en todas las pantallas) */}
-      <div className="shrink-0 bg-fo-ink px-4 py-2">
-        <button
-          type="button"
-          onClick={() => setListaActivos(true)}
-          aria-haspopup="dialog"
-          aria-label={`${pedidosActivos.length} ${pedidosActivos.length === 1 ? 'pedido activo' : 'pedidos activos'}. Ver mis pedidos`}
-          data-btn="pedidos-activos"
-          className={`flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm font-bold transition ${
-            pedidosActivos.length > 0 ? 'bg-fo-yellow text-fo-blue hover:bg-white' : 'bg-white/10 text-white/80 hover:bg-white/20'
-          }`}
-        >
-          <span className="flex items-center gap-2">
-            <Package size={18} />
-            <span>
-              {pedidosActivos.length} {pedidosActivos.length === 1 ? 'Pedido Activo' : 'Pedidos Activos'}
-            </span>
-          </span>
-          <span className="flex items-center gap-1.5">
-            {hayListo ? (
-              <span className="rounded-full bg-fo-green px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">Listo para recoger</span>
-            ) : null}
-            <ChevronRight size={16} />
-          </span>
-        </button>
-      </div>
       <BandaConexion />
 
-      {/* Resto de la app: las pantallas y hojas se superponen aquí, por debajo de la barra superior */}
+      {/* Resto de la app: cabecera + pantallas y hojas superpuestas */}
       <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
         {/* Cabecera */}
         <header className="shrink-0">
@@ -1522,16 +2029,37 @@ function AppPasajero({ visible }) {
             </LogoMarca>
           </div>
           <div className="flex items-center justify-between gap-3 bg-fo-blue px-4 pb-3 pt-3 text-white">
-            <div className="flex items-center gap-3">
-              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-fo-yellow text-fo-blue">
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-fo-yellow text-fo-blue">
                 <Ship size={22} />
               </span>
-              <div>
-                <p className="text-[11px] uppercase tracking-wider text-white/70">A bordo</p>
-                <h1 className="text-lg font-bold leading-tight">Click &amp; Collect</h1>
+              <div className="min-w-0">
+                <p className="text-[11px] uppercase tracking-wider text-white/70">{t('A bordo')}</p>
+                <h1 className="truncate text-lg font-bold leading-tight">Click &amp; Collect</h1>
               </div>
             </div>
-            <span className="rounded-full border border-white/40 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white/80">Prototipo</span>
+            <div className="flex shrink-0 items-center gap-2">
+              <BotonIdioma />
+              <button
+                type="button"
+                onClick={() => setListaActivos(true)}
+                aria-haspopup="dialog"
+                aria-label={`${pedidosActivos.length === 1 ? t('{n} pedido activo', { n: 1 }) : t('{n} pedidos activos', { n: pedidosActivos.length })}. ${t('Ver mis pedidos')}`}
+                title={t('Pedidos activos')}
+                data-btn="notificaciones"
+                className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20"
+              >
+                <BellRing size={20} />
+                {pedidosActivos.length > 0 ? (
+                  <span className="absolute -right-1 -top-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-fo-red px-1 text-[10px] font-bold text-white ring-2 ring-fo-blue">
+                    {pedidosActivos.length}
+                  </span>
+                ) : null}
+                {hayListo ? (
+                  <span className="absolute bottom-0.5 right-0.5 h-2.5 w-2.5 rounded-full bg-fo-green ring-2 ring-fo-blue" aria-hidden="true" />
+                ) : null}
+              </button>
+            </div>
           </div>
         </header>
 
@@ -1539,12 +2067,12 @@ function AppPasajero({ visible }) {
         {altaDemanda && fase === 'catalogo' ? (
           <div
             role="alert"
-            aria-label="Aviso de alta demanda"
+            aria-label={t('Alta demanda en cafeterías:')}
             className="fo-toast-in flex shrink-0 items-start gap-2.5 bg-fo-red px-4 py-3 text-white shadow-md"
           >
             <TriangleAlert size={20} className="mt-px shrink-0 text-fo-yellow" />
             <p className="text-[13px] font-semibold leading-snug">
-              <span className="font-bold">Alta demanda en cafeterías:</span> Los tiempos de espera son superiores a lo habitual.
+              <span className="font-bold">{t('Alta demanda en cafeterías:')}</span> {t('Los tiempos de espera son superiores a lo habitual.')}
             </p>
           </div>
         ) : null}
@@ -1553,10 +2081,10 @@ function AppPasajero({ visible }) {
         <div ref={scrollRef} onScroll={alHacerScroll} className="relative flex-1 overflow-y-auto pb-28">
           <div className="space-y-4 px-4 pt-4">
             <div className="rounded-card bg-white p-4">
-              <h2 className="text-xl font-bold text-fo-blue">Pide desde donde estés</h2>
+              <h2 className="text-xl font-bold text-fo-blue">{t('Pide desde donde estés')}</h2>
               <BarraAmarilla />
               <p className="mt-3 text-sm font-light text-fo-grey">
-                Elige, paga y recoge en la cafetería que prefieras. Sin colas y sin moverte hasta que esté listo.
+                {t('Elige, paga y recoge en la cafetería que prefieras. Sin colas y sin moverte hasta que esté listo.')}
               </p>
             </div>
           </div>
@@ -1565,7 +2093,7 @@ function AppPasajero({ visible }) {
           <nav
             ref={navRef}
             className="sticky top-0 z-10 -mb-1 mt-3 flex gap-2 overflow-x-auto bg-fo-ice px-4 py-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-            aria-label="Categorías"
+            aria-label={t('Categorías')}
           >
             {CATEGORIAS.map((c) => {
               const Ico = c.icono;
@@ -1581,7 +2109,7 @@ function AppPasajero({ visible }) {
                     activa ? 'border-fo-blue bg-fo-blue text-white' : 'border-fo-line bg-white text-fo-grey hover:border-fo-blue'
                   }`}
                 >
-                  <Ico size={16} /> {c.etiqueta}
+                  <Ico size={16} /> {etiquetaCategoria(c, idioma)}
                 </button>
               );
             })}
@@ -1589,8 +2117,8 @@ function AppPasajero({ visible }) {
 
           <div className="space-y-6 px-4 pt-3">
             {CATEGORIAS.map((c) => (
-              <section key={c.nombre} data-cat={c.nombre} aria-label={c.etiqueta}>
-                <h2 className="text-lg font-bold uppercase text-fo-blue">{c.etiqueta}</h2>
+              <section key={c.nombre} data-cat={c.nombre} aria-label={etiquetaCategoria(c, idioma)}>
+                <h2 className="text-lg font-bold uppercase text-fo-blue">{etiquetaCategoria(c, idioma)}</h2>
                 <BarraAmarilla />
                 <div className="mt-3 space-y-3">
                   {productos
@@ -1608,8 +2136,9 @@ function AppPasajero({ visible }) {
               </section>
             ))}
             <p className="pb-2 text-center text-xs text-fo-grey">
-              Prototipo · catálogo cargado desde CSV · pagos simulados ·{' '}
-              {modo === 'firebase' ? 'pedidos sincronizados con Firebase' : 'modo local (sin Firebase)'}
+              {t('Prototipo · catálogo cargado desde CSV · pagos simulados · {modo}', {
+                modo: modo === 'firebase' ? t('pedidos sincronizados con Firebase') : t('modo local (sin Firebase)'),
+              })}
             </p>
           </div>
         </div>
@@ -1621,7 +2150,7 @@ function AppPasajero({ visible }) {
               type="button"
               onClick={() => setFase('carrito')}
               className="fo-bar-in pointer-events-auto flex w-full items-center justify-between rounded-lg border border-fo-yellow bg-fo-yellow px-4 py-3.5 font-bold text-fo-blue shadow-[0_8px_20px_rgba(0,47,108,0.35)] transition hover:border-fo-blue"
-              aria-label={`Ver mi pedido: ${totalItems} artículos, ${eur(total)}`}
+              aria-label={t('Ver mi pedido: {n} artículos, {total}', { n: totalItems, total: eur(total) })}
             >
               <span className="flex items-center gap-3">
                 <span className="relative">
@@ -1630,7 +2159,7 @@ function AppPasajero({ visible }) {
                     {totalItems}
                   </span>
                 </span>
-                Ver mi pedido
+                {t('Ver mi pedido')}
               </span>
               <span className="text-lg">{eur(total)}</span>
             </button>
@@ -1640,40 +2169,21 @@ function AppPasajero({ visible }) {
         {/* PASO 1 · Resumen del carrito (hoja inferior) */}
         {fase === 'carrito' ? (
           <HojaInferior
-            titulo="Tu pedido"
-            subtitulo="Paso 1 de 3 · Resumen"
+            titulo={t('Tu pedido')}
+            subtitulo={t('Paso 1 de 3 · Resumen')}
             onClose={() => setFase('catalogo')}
             footer={
               lineas.length > 0 ? (
                 <div className="space-y-3">
-                  {/* Venta cruzada: comida sin bebida → sugerimos Agua (1 clic) justo encima del total */}
-                  {bebidaSugerida ? (
-                    <div className="fo-pop flex items-center gap-3 rounded-card border border-fo-yellow bg-fo-cream p-3" data-upsell="bebida">
-                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-fo-blue text-fo-yellow">
-                        <Droplet size={20} />
-                      </span>
-                      <p className="min-w-0 flex-1 text-[13px] leading-snug text-fo-blue">
-                        <b className="block text-sm">Completa tu menú</b>
-                        ¿Añades un Agua por <b>{eur(bebidaSugerida.precio)}</b>?
-                      </p>
-                      <Btn
-                        size="sm"
-                        onClick={() => dispatch({ type: 'CARRITO_MAS', id: bebidaSugerida.id })}
-                        aria-label={`Añadir ${bebidaSugerida.nombre} al pedido`}
-                      >
-                        <Plus size={16} strokeWidth={2.5} /> Añadir
-                      </Btn>
-                    </div>
-                  ) : null}
                   <div className="flex items-end justify-between">
-                    <span className="text-sm font-semibold text-fo-grey">Total</span>
+                    <span className="text-sm font-semibold text-fo-grey">{t('Total')}</span>
                     <span className="text-[28px] font-bold leading-none text-fo-blue">{eur(total)}</span>
                   </div>
                   <Btn className="w-full" onClick={() => setFase('mapa')}>
-                    Elegir punto de recogida <ArrowRight size={18} />
+                    {t('Elegir punto de recogida')} <ArrowRight size={18} />
                   </Btn>
                   <Btn variant="outlineBlue" className="w-full" onClick={() => setFase('catalogo')}>
-                    Seguir pidiendo
+                    {t('Seguir pidiendo')}
                   </Btn>
                 </div>
               ) : null
@@ -1682,9 +2192,9 @@ function AppPasajero({ visible }) {
             {lineas.length === 0 ? (
               <div className="py-8 text-center">
                 <ShoppingBag size={36} className="mx-auto text-[#B5B5B5]" />
-                <p className="mt-3 font-semibold text-fo-blue">Tu carrito está vacío</p>
+                <p className="mt-3 font-semibold text-fo-blue">{t('Tu carrito está vacío')}</p>
                 <Btn className="mt-4" onClick={() => setFase('catalogo')}>
-                  Ver el catálogo
+                  {t('Ver el catálogo')}
                 </Btn>
               </div>
             ) : (
@@ -1697,11 +2207,11 @@ function AppPasajero({ visible }) {
                       </span>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-start justify-between gap-2">
-                          <p className="text-[15px] font-semibold leading-tight text-fo-blue">{l.nombre}</p>
+                          <p className="text-[15px] font-semibold leading-tight text-fo-blue">{nombreProducto(l, idioma)}</p>
                           <button
                             type="button"
                             onClick={() => dispatch({ type: 'CARRITO_QUITAR', id: l.id })}
-                            aria-label={`Quitar ${l.nombre}`}
+                            aria-label={t('Quitar {nombre}', { nombre: nombreProducto(l, idioma) })}
                             className="-mr-1 -mt-1.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-fo-red transition hover:bg-fo-red/10"
                           >
                             <Trash2 size={17} />
@@ -1724,8 +2234,47 @@ function AppPasajero({ visible }) {
                 </ul>
                 <div className="mt-2 flex items-start gap-2 rounded-lg bg-fo-cream p-3 text-[13px] font-semibold text-fo-blue">
                   <Info size={16} className="mt-0.5 shrink-0" />
-                  En el siguiente paso eliges en qué cafetería recoges tu pedido.
+                  {t('En el siguiente paso eliges en qué cafetería recoges tu pedido.')}
                 </div>
+
+                {recomendaciones.length > 0 ? (
+                  <div className="fo-pop mt-4 rounded-card border border-fo-line bg-white p-3" data-recomendaciones="carrito">
+                    <div className="flex items-center gap-2">
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-fo-blue text-fo-yellow">
+                        <Sparkles size={16} />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold leading-tight text-fo-blue">{t('Recomendado para ti')}</p>
+                        <p className="text-[11px] text-fo-grey">{t('Basado en tu pedido y la hora')}</p>
+                      </div>
+                    </div>
+                    <ul className="mt-2 divide-y divide-fo-line">
+                      {recomendaciones.map((r) => {
+                        const nombreR = nombreProducto(r, idioma);
+                        return (
+                          <li key={r.id} className="flex items-center gap-2 py-2">
+                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#F7F7F7] text-fo-blue">
+                              <ImagenProducto producto={r} size={18} />
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-[13px] font-semibold text-fo-blue">{nombreR}</span>
+                              <span className="block text-[11px] text-fo-grey">
+                                {t(r.motivo)} · {eur(r.precio)}
+                              </span>
+                            </span>
+                            <Btn
+                              size="xs"
+                              onClick={() => dispatch({ type: 'CARRITO_MAS', id: r.id })}
+                              aria-label={t('Añadir {nombre} a las recomendaciones', { nombre: nombreR })}
+                            >
+                              <Plus size={14} strokeWidth={2.5} /> {t('Añadir')}
+                            </Btn>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                ) : null}
               </>
             )}
           </HojaInferior>
@@ -1734,7 +2283,7 @@ function AppPasajero({ visible }) {
         {/* PASO 2 · Mapa del buque: la cafetería se elige tocando directamente el plano */}
         {fase === 'mapa' ? (
           <Pantalla
-            titulo="Punto de recogida"
+            titulo={t('Punto de recogida')}
             paso={2}
             onBack={() => setFase('carrito')}
             footer={
@@ -1743,29 +2292,29 @@ function AppPasajero({ visible }) {
                   <MapPin size={14} />
                   {ubElegida ? (
                     <span>
-                      Recogida en <b className="text-fo-blue">{ubElegida.nombre}</b>
+                      {t('Recogida en')} <b className="text-fo-blue">{nombreUbicacion(ubElegida, idioma)}</b>
                     </span>
                   ) : (
-                    'Toca una cafetería en el plano para continuar'
+                    t('Toca una cafetería en el plano para continuar')
                   )}
                 </p>
                 <Btn className="w-full" disabled={!ubElegida} onClick={() => setFase('pago')}>
-                  Continuar al pago <ArrowRight size={18} />
+                  {t('Continuar al pago')} <ArrowRight size={18} />
                 </Btn>
               </div>
             }
           >
             <div className="space-y-4 p-4">
               <div>
-                <h3 className="text-xl font-bold text-fo-blue">¿Dónde recoges tu pedido?</h3>
+                <h3 className="text-xl font-bold text-fo-blue">{t('¿Dónde recoges tu pedido?')}</h3>
                 <BarraAmarilla />
                 <p className="mt-3 text-sm font-light text-fo-grey">
-                  Toca la cafetería del plano donde quieres recogerlo. Los tiempos dependen de los artículos que hay en cola.
+                  {t('Toca la cafetería del plano donde quieres recogerlo. Los tiempos dependen de los artículos que hay en cola.')}
                 </p>
                 {altaDemanda ? (
                   <p className="mt-3 flex items-start gap-1.5 rounded-lg bg-fo-cream p-2.5 text-[13px] font-semibold text-fo-blue" data-aviso="alta-demanda-mapa">
                     <TriangleAlert size={16} className="mt-px shrink-0 text-fo-red" />
-                    Alta demanda: los tiempos de espera se multiplican por {FACTOR_SOBRECARGA.toLocaleString('es-ES')}.
+                    {t('Alta demanda: los tiempos de espera se multiplican por {factor}.', { factor: FACTOR_SOBRECARGA.toLocaleString(locale) })}
                   </p>
                 ) : null}
               </div>
@@ -1778,19 +2327,20 @@ function AppPasajero({ visible }) {
                   seleccion={ubicacionId}
                   onSelect={setUbicacionId}
                 />
-                <div className="mt-3 border-t border-fo-line pt-3" aria-label="Leyenda de tiempos de espera">
-                  <p className="mb-1.5 text-center text-[11px] font-bold uppercase tracking-wide text-fo-grey">Tiempo de espera</p>
+                <div className="mt-3 border-t border-fo-line pt-3" aria-label={t('Leyenda de tiempos de espera')}>
+                  <p className="mb-1.5 text-center text-[11px] font-bold uppercase tracking-wide text-fo-grey">{t('Tiempo de espera')}</p>
                   <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[11px] font-semibold text-fo-grey">
                     {Object.entries(NIVELES_ESPERA).map(([nivel, n]) => (
                       <span key={nivel} className="flex items-center gap-1.5">
                         <span className={`h-2.5 w-2.5 rounded-full ring-1 ring-black/10 ${n.punto}`} />
-                        {n.nombre} ({n.rango})
+                        {t(n.nombre)} ({n.rango})
                       </span>
                     ))}
                   </div>
                   <p className="mt-2 text-center text-[11px] text-fo-grey" data-actualizacion="esperas">
-                    Se actualiza cada minuto · última vez a las{' '}
-                    {new Date(refresco.hora).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                    {t('Se actualiza cada minuto · última vez a las {hora}', {
+                      hora: new Date(refresco.hora).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }),
+                    })}
                   </p>
                 </div>
               </div>
@@ -1800,24 +2350,24 @@ function AppPasajero({ visible }) {
 
         {/* PASO 3 · Pago simulado */}
         {fase === 'pago' && ubElegida ? (
-          <Pantalla titulo="Resumen y pago" paso={3} onBack={() => setFase('mapa')}>
+          <Pantalla titulo={t('Resumen y pago')} paso={3} onBack={() => setFase('mapa')}>
             <div className="space-y-4 p-4">
               <div className="rounded-card border border-fo-line bg-white p-4">
                 <h3 className="mb-2 flex items-center gap-2 font-bold text-fo-blue">
-                  <ShoppingBag size={18} /> Tu pedido
+                  <ShoppingBag size={18} /> {t('Tu pedido')}
                 </h3>
                 <ul className="divide-y divide-fo-line">
                   {lineas.map((l) => (
                     <li key={l.id} className="flex justify-between gap-3 py-2 text-sm">
                       <span>
-                        {l.cantidad}× {l.nombre}
+                        {l.cantidad}× {nombreProducto(l, idioma)}
                       </span>
                       <span className="font-semibold text-fo-blue">{eur(l.cantidad * l.precio)}</span>
                     </li>
                   ))}
                 </ul>
                 <div className="mt-2 flex items-end justify-between border-t border-fo-line pt-3">
-                  <span className="text-sm font-semibold">Total</span>
+                  <span className="text-sm font-semibold">{t('Total')}</span>
                   <span className="text-[28px] font-bold leading-none text-fo-blue">{eur(total)}</span>
                 </div>
               </div>
@@ -1827,14 +2377,14 @@ function AppPasajero({ visible }) {
                   <MapPin size={20} />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs text-fo-grey">Recogida en</p>
-                  <p className="font-bold text-fo-blue">{ubElegida.nombre}</p>
-                  <p className="text-[13px] text-fo-grey">{ubElegida.zona}</p>
+                  <p className="text-xs text-fo-grey">{t('Recogida en')}</p>
+                  <p className="font-bold text-fo-blue">{nombreUbicacion(ubElegida, idioma)}</p>
+                  <p className="text-[13px] text-fo-grey">{zonaUbicacion(ubElegida, idioma)}</p>
                 </div>
                 <div className="flex flex-col items-end gap-1">
                   <ChipEspera min={esperas[ubElegida.id]} tam="sm" />
                   <button type="button" onClick={() => setFase('mapa')} className="text-xs font-semibold text-fo-blue underline">
-                    Cambiar
+                    {t('Cambiar')}
                   </button>
                 </div>
               </div>
@@ -1842,12 +2392,12 @@ function AppPasajero({ visible }) {
               {errorPago ? (
                 <div role="alert" data-error="pago" className="fo-pop flex items-start gap-2.5 rounded-card border-2 border-fo-red bg-white p-3.5 text-[13px] font-semibold text-fo-red">
                   <TriangleAlert size={18} className="mt-px shrink-0" />
-                  <p className="min-w-0 flex-1 leading-snug">{errorPago}</p>
+                  <p className="min-w-0 flex-1 leading-snug">{t(errorPago)}</p>
                 </div>
               ) : null}
 
               <div>
-                <h3 className="text-lg font-bold text-fo-blue">Elige cómo pagar</h3>
+                <h3 className="text-lg font-bold text-fo-blue">{t('Elige cómo pagar')}</h3>
                 <BarraAmarilla />
                 <div className="mt-3 space-y-2.5">
                   {METODOS_PAGO.map((m) => {
@@ -1856,19 +2406,19 @@ function AppPasajero({ visible }) {
                       <button
                         key={m.id}
                         type="button"
-                        onClick={() => pagar(m.nombre)}
+                        onClick={() => pagar(nombreMetodo(m, 'es'))}
                         disabled={procesando}
                         className="flex w-full items-center gap-3 rounded-btn border border-[#E3E3E3] bg-white px-4 py-3.5 font-bold text-fo-blue transition hover:border-fo-blue hover:bg-fo-ice disabled:opacity-60"
                       >
                         <Ico size={20} />
-                        <span className="flex-1 text-left">{m.nombre}</span>
+                        <span className="flex-1 text-left">{nombreMetodo(m, idioma)}</span>
                         <ChevronRight size={18} className="text-[#9A9A9A]" />
                       </button>
                     );
                   })}
                 </div>
                 <p className="mt-3 flex items-start gap-1.5 text-xs text-fo-grey">
-                  <Info size={14} className="mt-px shrink-0" /> Pago simulado: es un prototipo y no se realiza ningún cargo.
+                  <Info size={14} className="mt-px shrink-0" /> {t('Pago simulado: es un prototipo y no se realiza ningún cargo.')}
                 </p>
               </div>
             </div>
@@ -1877,16 +2427,16 @@ function AppPasajero({ visible }) {
 
         {/* Confirmación + seguimiento en directo */}
         {fase === 'confirmado' && pedidoSeg ? (
-          <section className="fo-slide-in absolute inset-0 z-20 flex flex-col bg-fo-ice" aria-label="Pedido confirmado">
+          <section className="fo-slide-in absolute inset-0 z-20 flex flex-col bg-fo-ice" aria-label={t('Pedido confirmado')}>
             <div className="flex-1 overflow-y-auto">
               <div className="bg-fo-blue px-5 pb-10 pt-8 text-center text-white">
                 <span className="fo-pop mx-auto flex h-[60px] w-[60px] items-center justify-center rounded-full bg-fo-yellow text-fo-blue">
                   <Check size={32} strokeWidth={3} />
                 </span>
-                <h2 className="mt-4 text-2xl font-bold">¡Pedido confirmado!</h2>
-                <p className="mt-1 text-sm text-white/80">Hemos avisado a la cafetería</p>
-                <p className="mt-3 inline-block rounded-full bg-fo-yellow px-5 py-1.5 text-2xl font-bold text-fo-blue" aria-label={`Número de pedido ${numeroPedido(pedidoSeg.numero)}`}>
-                  Pedido {numeroPedido(pedidoSeg.numero)}
+                <h2 className="mt-4 text-2xl font-bold">{t('¡Pedido confirmado!')}</h2>
+                <p className="mt-1 text-sm text-white/80">{t('Hemos avisado a la cafetería')}</p>
+                <p className="mt-3 inline-block rounded-full bg-fo-yellow px-5 py-1.5 text-2xl font-bold text-fo-blue" aria-label={t('Número de pedido {numero}', { numero: numeroPedido(pedidoSeg.numero) })}>
+                  {t('Pedido {numero}', { numero: numeroPedido(pedidoSeg.numero) })}
                 </p>
               </div>
 
@@ -1898,17 +2448,20 @@ function AppPasajero({ visible }) {
                       {pedidoSeg.estado === 'listo' ? (
                         <div className="fo-pop rounded-card border-2 border-fo-yellow bg-fo-cream p-4 text-center">
                           <BellRing className="mx-auto text-fo-blue" size={28} />
-                          <p className="mt-1 text-lg font-bold text-fo-blue">¡Listo para recoger!</p>
+                          <p className="mt-1 text-lg font-bold text-fo-blue">{t('¡Listo para recoger!')}</p>
                           <p className="text-sm text-fo-grey">
-                            Acércate a <b>{ub.nombre}</b> y di tu número <b>{numeroPedido(pedidoSeg.numero)}</b>.
+                            {t('Acércate a {nombre} y di tu número {numero}.', {
+                              nombre: nombreUbicacion(ub, idioma),
+                              numero: numeroPedido(pedidoSeg.numero),
+                            })}
                           </p>
                         </div>
                       ) : null}
                       {pedidoSeg.estado === 'entregado' ? (
                         <div className="rounded-card border border-fo-line bg-white p-4 text-center">
                           <PartyPopper className="mx-auto text-fo-blue" size={28} />
-                          <p className="mt-1 text-lg font-bold text-fo-blue">Pedido entregado</p>
-                          <p className="text-sm text-fo-grey">¡Que aproveche!</p>
+                          <p className="mt-1 text-lg font-bold text-fo-blue">{t('Pedido entregado')}</p>
+                          <p className="text-sm text-fo-grey">{t('¡Que aproveche!')}</p>
                         </div>
                       ) : null}
 
@@ -1918,35 +2471,35 @@ function AppPasajero({ visible }) {
                             <MapPin size={20} />
                           </span>
                           <div className="min-w-0 flex-1">
-                            <p className="text-xs text-fo-grey">Recoge tu pedido en</p>
-                            <p className="text-lg font-bold leading-tight text-fo-blue">{ub.nombre}</p>
-                            <p className="text-[13px] text-fo-grey">{ub.zona}</p>
+                            <p className="text-xs text-fo-grey">{t('Recoge tu pedido en')}</p>
+                            <p className="text-lg font-bold leading-tight text-fo-blue">{nombreUbicacion(ub, idioma)}</p>
+                            <p className="text-[13px] text-fo-grey">{zonaUbicacion(ub, idioma)}</p>
                           </div>
                           {pedidoSeg.estado !== 'listo' && pedidoSeg.estado !== 'entregado' ? <ChipEspera min={esperas[ub.id]} tam="sm" /> : null}
                         </div>
                       </div>
 
                       <div className="rounded-card bg-white p-4">
-                        <h3 className="mb-3 font-bold text-fo-blue">Estado de tu pedido</h3>
+                        <h3 className="mb-3 font-bold text-fo-blue">{t('Estado de tu pedido')}</h3>
                         <SeguimientoPedido pedido={pedidoSeg} />
                       </div>
 
                       <BloquePuntosPlus key={pedidoSeg.numero} pedido={pedidoSeg} />
 
                       <div className="rounded-card bg-white p-4">
-                        <h3 className="mb-2 font-bold text-fo-blue">Resumen</h3>
+                        <h3 className="mb-2 font-bold text-fo-blue">{t('Resumen')}</h3>
                         <ul className="divide-y divide-fo-line text-sm">
                           {pedidoSeg.items.map((i) => (
                             <li key={i.id} className="flex justify-between py-1.5">
                               <span>
-                                {i.cantidad}× {i.nombre}
+                                {i.cantidad}× {nombreItem(i, idioma)}
                               </span>
                               <span className="font-semibold text-fo-blue">{eur(i.cantidad * i.precio)}</span>
                             </li>
                           ))}
                         </ul>
                         <div className="mt-2 flex items-center justify-between border-t border-fo-line pt-2 text-sm">
-                          <span>Pagado con {pedidoSeg.metodoPago}</span>
+                          <span>{t('Pagado con {metodo}', { metodo: nombreMetodoGuardado(pedidoSeg.metodoPago, idioma) })}</span>
                           <span className="text-lg font-bold text-fo-blue">{eur(pedidoSeg.total)}</span>
                         </div>
                       </div>
@@ -1957,7 +2510,7 @@ function AppPasajero({ visible }) {
             </div>
             <div className="shrink-0 border-t border-fo-line bg-white p-4">
               <Btn className="w-full" onClick={nuevoPedido}>
-                Hacer otro pedido
+                {t('Hacer otro pedido')}
               </Btn>
             </div>
           </section>
@@ -1966,22 +2519,22 @@ function AppPasajero({ visible }) {
         {/* Hoja con los pedidos activos: tocar uno abre su seguimiento detallado */}
         {listaActivos ? (
           <HojaInferior
-            titulo="Pedidos activos"
-            subtitulo="Toca un pedido para ver su estado y su número de recogida"
+            titulo={t('Pedidos activos')}
+            subtitulo={t('Toca un pedido para ver su estado y su número de recogida')}
             icono={Package}
             onClose={() => setListaActivos(false)}
           >
             {pedidosActivos.length === 0 ? (
               <div className="py-8 text-center" data-lista="vacia">
                 <Package size={36} className="mx-auto text-[#B5B5B5]" />
-                <p className="mt-3 font-semibold text-fo-blue">No tienes pedidos activos</p>
-                <p className="mt-1 text-sm text-fo-grey">Cuando hagas un pedido aparecerá aquí con su estado.</p>
+                <p className="mt-3 font-semibold text-fo-blue">{t('No tienes pedidos activos')}</p>
+                <p className="mt-1 text-sm text-fo-grey">{t('Cuando hagas un pedido aparecerá aquí con su estado.')}</p>
                 <Btn className="mt-4" onClick={() => setListaActivos(false)}>
-                  Seguir mirando el catálogo
+                  {t('Seguir mirando el catálogo')}
                 </Btn>
               </div>
             ) : (
-              <ul className="space-y-2.5 pb-2" aria-label="Pedidos activos">
+              <ul className="space-y-2.5 pb-2" aria-label={t('Pedidos activos')}>
                 {pedidosActivos.map((p) => {
                   const ub = ubicaciones.find((u) => u.id === p.ubicacionId);
                   const articulos = p.items.reduce((s, i) => s + i.cantidad, 0);
@@ -1992,7 +2545,7 @@ function AppPasajero({ visible }) {
                       <button
                         type="button"
                         onClick={() => verSeguimiento(p.numero)}
-                        aria-label={`Ver seguimiento del pedido ${numeroPedido(p.numero)}, ${info.texto}`}
+                        aria-label={`${t('Ver seguimiento del pedido {numero}', { numero: numeroPedido(p.numero) })}, ${t(info.texto)}`}
                         data-pedido-activo={p.numero}
                         className="flex w-full items-center gap-3 rounded-card border border-fo-line bg-white p-3 text-left shadow-[1px_2px_4px_0_rgba(187,187,187,0.5)] transition hover:border-fo-blue"
                       >
@@ -2005,7 +2558,7 @@ function AppPasajero({ visible }) {
                             <Pill tone={info.tono}>{info.texto}</Pill>
                           </span>
                           <span className="mt-1 block truncate text-[13px] text-fo-grey">
-                            {ub.nombre} · {articulos} {articulos === 1 ? 'artículo' : 'artículos'} · {eur(p.total)}
+                            {nombreUbicacion(ub, idioma)} · {t('{n} artículos', { n: articulos })} · {eur(p.total)}
                           </span>
                         </span>
                         <ChevronRight size={20} className="shrink-0 text-fo-blue" />
@@ -2023,12 +2576,14 @@ function AppPasajero({ visible }) {
       {procesando ? (
         <div className="fo-fade-in absolute inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-[rgba(0,47,108,0.55)] text-fo-yellow" role="status" aria-live="polite">
           <Loader2 size={50} className="animate-spin" />
-          <span className="px-6 text-center text-2xl font-semibold">{procesando === 'envio' ? 'Enviando tu pedido a la cafetería…' : 'Procesando pago…'}</span>
+          <span className="px-6 text-center text-2xl font-semibold">
+            {procesando === 'envio' ? t('Enviando tu pedido a la cafetería…') : t('Procesando pago…')}
+          </span>
         </div>
       ) : null}
 
       {/* Mientras Firebase conecta (o si falla) la app muestra una pantalla de carga en lugar de datos a medias */}
-      <PantallaCarga marco />
+      <PantallaCarga marco={demo} />
 
       {/* Aviso de la tripulación */}
       {toast ? (
@@ -2044,7 +2599,7 @@ function AppPasajero({ visible }) {
             }`}
           >
             <BellRing size={22} className={toast.estado === 'listo' ? 'text-fo-yellow' : 'text-fo-blue'} />
-            <span className="flex-1 text-sm font-bold">{toast.texto}</span>
+            <span className="flex-1 text-sm font-bold">{textoNotificacion(toast, idioma, ubicaciones, t)}</span>
             <X size={16} className="opacity-60" />
           </button>
         </div>
@@ -2072,37 +2627,38 @@ function useAhora(ms) {
 }
 
 function TarjetaPedido({ pedido, ubicacion, columna, ahora, onAvanzar }) {
+  const { t, eur, idioma, locale } = useI18n();
   const mins = Math.max(0, Math.floor((ahora - pedido.creado) / 60000));
   // Se marca en rojo cuando un pedido en preparación ya ha superado el tiempo que le correspondía según el modelo de colas
   const tarde = pedido.estado === 'preparando' && mins >= calcularEspera(pedido.items.reduce((s, i) => s + i.cantidad, 0));
-  const hora = new Date(pedido.creado).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+  const hora = new Date(pedido.creado).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
   const Flecha = columna.estado === 'listo' ? Check : ArrowRight;
   return (
-    <article className="fo-pop rounded-card border border-fo-line bg-white p-5 shadow-[0_4px_10px_0_rgba(0,0,0,0.11)]" aria-label={`Pedido ${numeroPedido(pedido.numero)}`}>
+    <article className="fo-pop rounded-card border border-fo-line bg-white p-5 shadow-[0_4px_10px_0_rgba(0,0,0,0.11)]" aria-label={t('Pedido {numero}', { numero: numeroPedido(pedido.numero) })}>
       <div className="flex items-start justify-between gap-2">
         <h3 className="text-3xl font-bold leading-none text-fo-blue">{numeroPedido(pedido.numero)}</h3>
         <span className={`flex items-center gap-1 text-sm font-semibold ${tarde ? 'text-fo-red' : 'text-fo-grey'}`} data-tarde={tarde ? 'si' : undefined}>
-          <Clock size={14} /> {mins < 1 ? 'Ahora mismo' : `hace ${mins} min`} · {hora}
+          <Clock size={14} /> {mins < 1 ? t('Ahora mismo') : t('hace {n} min', { n: mins })} · {hora}
         </span>
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <Pill tone={TONO_ETIQUETA_UBICACION[ubicacion.id] || 'blue'}>
-          <MapPin size={12} /> {ubicacion.nombre}
+          <MapPin size={12} /> {nombreUbicacion(ubicacion, idioma)}
         </Pill>
-        <span className="text-xs text-fo-grey">Pago: {pedido.metodoPago}</span>
+        <span className="text-xs text-fo-grey">{t('Pago: {metodo}', { metodo: nombreMetodoGuardado(pedido.metodoPago, idioma) })}</span>
       </div>
       <ul className="mt-3 space-y-1.5 border-t border-fo-line pt-3 text-lg">
         {pedido.items.map((i) => (
           <li key={i.id} className="flex gap-2">
             <b className="w-9 shrink-0 text-fo-blue">{i.cantidad}×</b>
-            <span>{i.nombre}</span>
+            <span>{nombreItem(i, idioma)}</span>
           </li>
         ))}
       </ul>
       <div className="mt-3 flex items-center justify-between gap-3 border-t border-fo-line pt-3">
         <span className="text-xl font-bold text-fo-blue">{eur(pedido.total)}</span>
         <Btn variant={columna.variante} onClick={onAvanzar}>
-          {columna.accion} <Flecha size={16} />
+          {t(columna.accion)} <Flecha size={16} />
         </Btn>
       </div>
     </article>
@@ -2111,6 +2667,7 @@ function TarjetaPedido({ pedido, ubicacion, columna, ahora, onAvanzar }) {
 
 function PanelTripulacion() {
   const { state, dispatch } = useStore();
+  const { t, idioma } = useI18n();
   const { pedidos, ubicaciones, altaDemanda } = state;
   const [filtro, setFiltro] = useState('todas');
   const ahora = useAhora(15000);
@@ -2127,27 +2684,32 @@ function PanelTripulacion() {
       <header className={`shrink-0 text-white transition-colors duration-300 ${altaDemanda ? 'bg-fo-red' : 'bg-fo-blue'}`}>
         <div className="flex flex-wrap items-center gap-x-6 gap-y-3 px-5 py-3">
           <div>
-            <p className="text-[11px] uppercase tracking-wider text-white/70">Vista B · Tablet</p>
-            <h1 className="text-xl font-bold leading-tight">Panel de tripulación</h1>
+            <p className="text-[11px] uppercase tracking-wider text-white/70">{t('Tripulación')}</p>
+            <h1 className="text-xl font-bold leading-tight">{t('Panel de tripulación')}</h1>
           </div>
 
           <div className="flex items-center gap-2">
             {ubicaciones.map((u) => (
               <span
                 key={u.id}
-                title={`${articulosEnColaDe(u.id, pedidos)} artículos en cola`}
+                title={t('{n} artículos en cola', { n: articulosEnColaDe(u.id, pedidos) })}
                 className="flex items-center gap-2 rounded-full bg-white/10 py-1 pl-3 pr-1 text-xs font-semibold"
               >
-                {u.corto}
+                {cortoUbicacion(u, idioma)}
                 <ChipEspera min={esperaDe(u, pedidos, altaDemanda)} tam="sm" />
               </span>
             ))}
           </div>
 
-          <div className="ml-auto flex flex-wrap items-center gap-4">
+          <div className="ml-auto flex flex-wrap items-center gap-3">
             <div className="flex gap-4 text-center text-xs text-white/80">
-              <span><b className="block text-xl leading-none text-white">{activos.length}</b>activos</span>
-              <span><b className="block text-xl leading-none text-white">{entregados}</b>entregados</span>
+              <span><b className="block text-xl leading-none text-white">{activos.length}</b>{t('activos')}</span>
+              <span><b className="block text-xl leading-none text-white">{entregados}</b>{t('entregados')}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <ChipConexion />
+              <BotonIdioma />
+              <BotonReiniciar />
             </div>
             <button
               type="button"
@@ -2157,26 +2719,26 @@ function PanelTripulacion() {
               className="flex items-center gap-3 rounded-full border-2 border-white/40 bg-white/10 px-4 py-2 text-sm font-bold transition hover:bg-white/20"
             >
               <Flame size={18} className={altaDemanda ? 'text-fo-yellow' : ''} />
-              Modo Alta Demanda
+              {t('Modo Alta Demanda')}
               <span className={`relative h-6 w-11 rounded-full transition-colors ${altaDemanda ? 'bg-fo-yellow' : 'bg-white/30'}`}>
                 <span className={`absolute top-0.5 h-5 w-5 rounded-full transition-all ${altaDemanda ? 'left-[22px] bg-fo-blue' : 'left-0.5 bg-white'}`} />
               </span>
-              <span className="w-14 text-left text-[11px] uppercase">{altaDemanda ? 'Activo' : 'Inactivo'}</span>
+              <span className="w-14 text-left text-[11px] uppercase">{altaDemanda ? t('Activo') : t('Inactivo')}</span>
             </button>
           </div>
         </div>
         {altaDemanda ? (
           <div className="flex items-center justify-center gap-2 bg-fo-yellow px-4 py-1.5 text-sm font-bold text-fo-blue">
             <TriangleAlert size={16} className="fo-blink" />
-            MODO ALTA DEMANDA ACTIVO · Prioriza los pedidos más antiguos
+            {t('MODO ALTA DEMANDA ACTIVO · Prioriza los pedidos más antiguos')}
           </div>
         ) : null}
       </header>
       <BandaConexion />
 
       <div className="flex shrink-0 items-center gap-2 px-5 pt-4">
-        <span className="mr-1 text-sm font-semibold text-fo-grey">Cafetería:</span>
-        {[{ id: 'todas', corto: 'Todas' }, ...ubicaciones].map((u) => (
+        <span className="mr-1 text-sm font-semibold text-fo-grey">{t('Cafetería:')}</span>
+        {[{ id: 'todas', corto: 'Todas', cortoEn: 'All' }, ...ubicaciones].map((u) => (
           <button
             key={u.id}
             type="button"
@@ -2186,7 +2748,7 @@ function PanelTripulacion() {
               filtro === u.id ? 'border-fo-blue bg-fo-blue text-white' : 'border-fo-line bg-white text-fo-grey hover:border-fo-blue'
             }`}
           >
-            {u.corto}
+            {cortoUbicacion(u, idioma)}
           </button>
         ))}
       </div>
@@ -2196,10 +2758,10 @@ function PanelTripulacion() {
           const pedidosCol = visibles.filter((p) => p.estado === col.estado);
           const Ico = col.icono;
           return (
-            <section key={col.estado} className="flex min-h-[200px] flex-col overflow-hidden rounded-card border border-fo-line bg-white/70" aria-label={col.titulo}>
+            <section key={col.estado} className="flex min-h-[200px] flex-col overflow-hidden rounded-card border border-fo-line bg-white/70" aria-label={t(col.titulo)}>
               <header className="flex items-center justify-between border-t-[5px] bg-white px-4 py-3" style={{ borderTopColor: col.color }}>
                 <h2 className="flex items-center gap-2 text-base font-bold uppercase text-fo-blue">
-                  <Ico size={18} /> {col.titulo}
+                  <Ico size={18} /> {t(col.titulo)}
                 </h2>
                 <span className="flex h-7 min-w-[28px] items-center justify-center rounded-full bg-fo-blue px-2 text-sm font-bold text-white">{pedidosCol.length}</span>
               </header>
@@ -2207,7 +2769,9 @@ function PanelTripulacion() {
                 {pedidosCol.length === 0 ? (
                   <div className="flex h-full min-h-[120px] flex-col items-center justify-center gap-2 text-center text-sm text-[#9A9A9A]">
                     <Ico size={28} />
-                    {col.estado === 'preparando' ? 'Sin pedidos en preparación. Haz un pedido en la App Pasajero y aparecerá aquí.' : 'Sin pedidos listos'}
+                    {col.estado === 'preparando'
+                      ? t('Sin pedidos en preparación. Haz un pedido en la App Pasajero y aparecerá aquí.')
+                      : t('Sin pedidos listos')}
                   </div>
                 ) : (
                   pedidosCol.map((p) => (
@@ -2233,117 +2797,65 @@ function PanelTripulacion() {
 }
 
 /* -------------------------------------------------------------------
-   8. APP: barra superior (interruptor de vista) + las dos vistas
+   8. APP: una vista según la URL (/cliente, /cliente_pc, /admin)
    ------------------------------------------------------------------- */
-function Contenido() {
-  const { state, dispatch, modo } = useStore();
-  const [vista, setVista] = useState('pasajero');
-  const [claveReinicio, setClaveReinicio] = useState(0);
-  const [confirmaReinicio, setConfirmaReinicio] = useState(false);
-  const enPreparacion = state.pedidos.filter((p) => p.estado === 'preparando').length; // pendientes para la tripulación
-
-  // Con Firebase, reiniciar borra los pedidos de TODOS los dispositivos: pide una segunda pulsación (se cancela sola a los 4 s)
-  useEffect(() => {
-    if (!confirmaReinicio) return undefined;
-    const t = setTimeout(() => setConfirmaReinicio(false), 4000);
-    return () => clearTimeout(t);
-  }, [confirmaReinicio]);
-
-  const reiniciar = async () => {
-    if (modo === 'firebase' && !confirmaReinicio) {
-      setConfirmaReinicio(true);
-      dispatch({ type: 'AVISAR', aviso: { texto: 'Pulsa de nuevo para borrar los pedidos de TODOS los dispositivos.', tono: 'info' } });
-      return;
-    }
-    setConfirmaReinicio(false);
-    const ok = await dispatch({ type: 'REINICIAR' });
-    if (ok) {
-      setClaveReinicio((k) => k + 1);
-      setVista('pasajero');
-    }
-  };
-
-  const tab = (id, corto, texto, Ico, extra) => (
-    <button
-      type="button"
-      role="tab"
-      aria-selected={vista === id}
-      onClick={() => setVista(id)}
-      className={`flex items-center gap-1.5 whitespace-nowrap rounded-md px-2 py-1.5 text-[13px] font-bold transition sm:gap-2 sm:px-3 sm:text-sm ${
-        vista === id ? 'bg-fo-yellow text-fo-blue' : 'text-white/80 hover:bg-white/10'
-      }`}
-    >
-      <Ico size={16} className="hidden sm:block" />
-      <span className="sm:hidden">{corto}</span>
-      <span className="hidden sm:inline">{texto}</span>
-      {extra}
-    </button>
-  );
-
+function BarraDemo() {
+  const { t } = useI18n();
   return (
-    <div className="flex h-[100dvh] w-full flex-col overflow-hidden font-sans">
-      {/* Barra global: logos · interruptor de vista (centrado) · reinicio */}
-      <div className="flex h-14 shrink-0 items-center justify-between gap-2 bg-fo-blue px-3 text-white sm:px-4 md:grid md:grid-cols-[1fr_auto_1fr]">
-        <div className="flex min-w-0 items-center gap-3 justify-self-start">
-          <div className="flex shrink-0 items-center gap-1.5 rounded-md bg-white px-1.5 py-1 sm:gap-2.5 sm:px-2.5" data-marca="barra-global">
-            <LogoMarca src={LOGO_FRED_OLSEN} alt="Fred. Olsen Express" className="h-[18px] sm:h-6">
-              <span className="text-[11px] font-extrabold uppercase tracking-tight text-fo-blue">
-                Fred. Olsen <i className="font-semibold normal-case text-fo-red">Express</i>
-              </span>
-            </LogoMarca>
-            <span aria-hidden="true" className="h-4 w-px bg-fo-line sm:h-5" />
-            <LogoMarca src={LOGO_TALENTO_CANARIO} alt="Talento Canario" className="h-[18px] sm:h-6">
-              <span className="text-[11px] font-extrabold lowercase tracking-tight text-[#353A8E]">talento canario</span>
-            </LogoMarca>
-          </div>
-          <span className="hidden truncate text-sm font-bold text-white/90 lg:block">Click &amp; Collect a bordo</span>
-        </div>
-
-        <div role="tablist" aria-label="Cambiar de vista" className="flex shrink-0 gap-1 justify-self-center rounded-lg bg-white/10 p-1">
-          {tab('pasajero', 'Pasajero', 'App Pasajero', Smartphone, null)}
-          {tab(
-            'tripulacion',
-            'Tripulación',
-            'Panel Tripulación',
-            ClipboardList,
-            enPreparacion > 0 ? (
-              <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-fo-red px-1 text-[11px] text-white" aria-label={`${enPreparacion} pedidos en preparación`}>
-                {enPreparacion}
-              </span>
-            ) : null
-          )}
-        </div>
-
-        <div className="flex shrink-0 items-center gap-1 justify-self-end">
-          <ChipConexion />
-          <button
-            type="button"
-            onClick={reiniciar}
-            className={`flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-semibold transition max-[339px]:hidden ${
-              confirmaReinicio ? 'bg-fo-red text-white' : 'text-white/80 hover:bg-white/10'
-            }`}
-            title={modo === 'firebase' ? 'Reiniciar demo (borra los pedidos de todos los dispositivos)' : 'Reiniciar demo'}
-            data-btn="reiniciar"
-          >
-            <RotateCcw size={15} />
-            <span className={confirmaReinicio ? 'inline' : 'hidden md:inline'}>{confirmaReinicio ? '¿Seguro?' : 'Reiniciar demo'}</span>
-          </button>
+    <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 bg-fo-blue px-3 py-2 text-white shadow-md sm:px-5" data-barra="demo">
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-fo-yellow text-fo-blue">
+          <Smartphone size={17} />
+        </span>
+        <div className="min-w-0">
+          <p className="truncate text-sm font-bold leading-tight">{t('Demo PC')} · Click &amp; Collect</p>
+          <p className="hidden truncate text-[11px] text-white/70 sm:block">{t('Esta es la vista que ve el cliente en su móvil')}</p>
         </div>
       </div>
+      <nav className="flex flex-wrap items-center gap-1.5" aria-label={t('Demo PC')}>
+        <a
+          href="../cliente/"
+          className="rounded-full bg-fo-yellow px-3 py-1.5 text-xs font-bold text-fo-blue transition hover:bg-white"
+          title={t('Abrir app del pasajero')}
+        >
+          {t('App cliente')}
+        </a>
+        <a
+          href="../admin/"
+          className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-white/20"
+          title={t('Abrir panel de tripulación')}
+        >
+          {t('Panel tripulación')}
+        </a>
+        <BotonIdioma />
+      </nav>
+    </div>
+  );
+}
 
-      {/* Contenedor de las vistas: centrado estricto (flex + items-center + justify-center) */}
-      <main className="relative flex h-full min-h-0 w-full flex-1 items-center justify-center bg-fo-sky" data-contenedor="vistas">
-        {/* Las dos vistas siguen montadas para conservar su estado local al cambiar */}
-        <div className={`h-full w-full items-center justify-center md:p-6 ${vista === 'pasajero' ? 'flex' : 'hidden'}`}>
-          <div className="relative h-full w-full max-w-[400px] overflow-hidden bg-fo-ice md:h-[min(100%,820px)] md:rounded-[3rem] md:border-[12px] md:border-[#0B1F3F] md:shadow-[0_20px_40px_rgba(0,0,0,0.3)]">
-            <AppPasajero key={claveReinicio} visible={vista === 'pasajero'} />
+function Contenido() {
+  if (MODO_ADMIN) {
+    return (
+      <div className="relative h-[100dvh] w-full overflow-hidden bg-fo-ice font-sans">
+        <PanelTripulacion />
+        <AvisoGlobal />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-fo-sky font-sans">
+      {MODO_PC ? <BarraDemo /> : null}
+      <main className={`relative flex h-full min-h-0 w-full flex-1 items-center justify-center ${MODO_PC ? 'p-3 sm:p-6' : ''}`}>
+        {MODO_PC ? (
+          <div className="relative h-full w-full max-w-[400px] overflow-hidden rounded-[2.5rem] border-[10px] border-[#0B1F3F] bg-fo-ice shadow-[0_20px_40px_rgba(0,0,0,0.3)] sm:rounded-[3rem] sm:border-[12px]" style={{ maxHeight: '820px' }}>
+            <AppPasajero visible demo />
           </div>
-        </div>
-        <div className={`h-full w-full items-center justify-center ${vista === 'tripulacion' ? 'flex' : 'hidden'}`}>
-          <div className="h-full w-full">
-            <PanelTripulacion key={claveReinicio} />
+        ) : (
+          <div className="h-full w-full overflow-hidden bg-fo-ice">
+            <AppPasajero visible />
           </div>
-        </div>
+        )}
         <AvisoGlobal />
       </main>
     </div>
@@ -2352,9 +2864,11 @@ function Contenido() {
 
 function App() {
   return (
-    <StoreProvider>
-      <Contenido />
-    </StoreProvider>
+    <I18nProvider>
+      <StoreProvider>
+        <Contenido />
+      </StoreProvider>
+    </I18nProvider>
   );
 }
 
