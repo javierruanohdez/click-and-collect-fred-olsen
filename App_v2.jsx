@@ -10,6 +10,7 @@ import {
   Candy,
   Check,
   ChefHat,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   CircleDot,
@@ -327,6 +328,32 @@ const CATEGORIAS = (() => {
 })();
 const etiquetaCategoria = (c, idioma) => (idioma === 'en' ? CATEGORIAS_EN[c.nombre] || c.etiqueta : c.etiqueta);
 
+// Menús configurables: cada grupo se elige en un desplegable antes de añadirlo.
+// El precio del menú es fijo; las opciones solo definen qué se prepara.
+const MENUS = {
+  6: [
+    { clave: 'dulce', etiqueta: 'Elige bollería', categorias: ['Croissants', 'Bolleria'] },
+    { clave: 'bebida', etiqueta: 'Elige bebida caliente', categorias: ['Cafés'] },
+  ],
+  38: [
+    { clave: 'bocadillo', etiqueta: 'Elige bocadillo', categorias: ['Bocadillos'] },
+    { clave: 'bebida', etiqueta: 'Elige refresco o cerveza', categorias: ['Refrescos Cola', 'Cervezas'] },
+  ],
+  39: [
+    { clave: 'sandwich', etiqueta: 'Elige sándwich', categorias: ['Sandwiches'] },
+    { clave: 'bebida', etiqueta: 'Elige agua o refresco', categorias: ['Aguas', 'Refrescos Cola'] },
+  ],
+  40: [
+    { clave: 'principal', etiqueta: 'Elige principal', categorias: ['Bocadillos', 'Sandwiches', 'Croissants', 'Bolleria'] },
+    { clave: 'bebida', etiqueta: 'Elige bebida', categorias: ['Aguas', 'Refrescos Cola', 'Cervezas', 'Cafés'] },
+    { clave: 'snack', etiqueta: 'Elige snack', categorias: ['Snacks'] },
+  ],
+};
+const esMenu = (p) => Boolean(MENUS[p.id]);
+const claveLinea = (id, opciones = []) =>
+  opciones.length ? `${id}|${opciones.map((o) => `${o.grupo}:${o.id}`).sort().join(',')}` : String(id);
+const textoOpciones = (opciones = [], idioma = 'es') => opciones.map((o) => nombreItem(o, idioma)).join(' · ');
+
 // El tiempo de espera de cada cafetería NO es un dato fijo: se calcula con el modelo de colas de la sección 2
 const UBICACIONES_INICIALES = [
   { id: 'proa', nombre: 'Cafetería Proa', nombreEn: 'Bow Café', corto: 'Proa', cortoEn: 'Bow', zona: 'Cubierta 6 · Zona de proa', zonaEn: 'Deck 6 · Bow area' },
@@ -492,6 +519,23 @@ const TEXTOS_EN = {
   'En el siguiente paso eliges en qué cafetería recoges tu pedido.': 'In the next step you choose which café to collect from.',
   'Añadir {nombre} al carrito': 'Add {nombre} to cart',
   'Añadir {nombre} al pedido': 'Add {nombre} to order',
+  'Elegir opciones': 'Choose options',
+  'Cerrar opciones': 'Close options',
+  'Personaliza tu menú': 'Customise your menu',
+  'Selecciona una opción': 'Select an option',
+  'Añadir menú': 'Add menu',
+  'Completa las opciones para añadirlo': 'Complete the options to add it',
+  'Sin opciones disponibles': 'No options available',
+  'Elige bollería': 'Choose a pastry',
+  'Elige bebida caliente': 'Choose a hot drink',
+  'Elige bocadillo': 'Choose a baguette',
+  'Elige refresco o cerveza': 'Choose a soft drink or beer',
+  'Elige sándwich': 'Choose a sandwich',
+  'Elige agua o refresco': 'Choose water or a soft drink',
+  'Elige principal': 'Choose a main',
+  'Elige bebida': 'Choose a drink',
+  'Elige snack': 'Choose a snack',
+  '{n} en tu pedido': '{n} in your order',
   'Quitar {nombre} del carrito': 'Remove {nombre} from cart',
   'Completa tu menú': 'Complete your meal',
   '¿Añades un Agua por {precio}?': 'Add a water for {precio}?',
@@ -646,8 +690,9 @@ const TEXTOS_EN = {
 const I18nCtx = createContext(null);
 const useI18n = () => useContext(I18nCtx);
 
-function I18nProvider({ children }) {
+function I18nProvider({ children, idiomaForzado }) {
   const [idioma, setIdioma] = useState(() => {
+    if (idiomaForzado) return idiomaForzado;
     try {
       return localStorage.getItem('click-collect-idioma') === 'en' ? 'en' : 'es';
     } catch (e) {
@@ -656,13 +701,18 @@ function I18nProvider({ children }) {
   });
 
   useEffect(() => {
+    if (idiomaForzado) setIdioma(idiomaForzado);
+  }, [idiomaForzado]);
+
+  useEffect(() => {
     document.documentElement.lang = idioma;
+    if (idiomaForzado) return;
     try {
       localStorage.setItem('click-collect-idioma', idioma);
     } catch (e) {
       /* sin almacenamiento: el idioma dura esta sesión */
     }
-  }, [idioma]);
+  }, [idioma, idiomaForzado]);
 
   const t = useCallback(
     (texto, vars) => {
@@ -682,7 +732,9 @@ function I18nProvider({ children }) {
     [idioma]
   );
 
-  const cambiarIdioma = useCallback(() => setIdioma((i) => (i === 'es' ? 'en' : 'es')), []);
+  const cambiarIdioma = useCallback(() => {
+    if (!idiomaForzado) setIdioma((i) => (i === 'es' ? 'en' : 'es'));
+  }, [idiomaForzado]);
   const locale = idioma === 'en' ? 'en-GB' : 'es-ES';
   const value = useMemo(
     () => ({ idioma, locale, setIdioma, cambiarIdioma, t, eur }),
@@ -757,7 +809,7 @@ function recomendarProductos({ lineas, productos, ahora = Date.now() }) {
   if (!lineas.length) return [];
   const enCarrito = new Set(lineas.map((l) => l.id));
   const cats = new Set(lineas.map((l) => l.categoria));
-  const disponibles = productos.filter((p) => p.stock_disponible > 0 && !enCarrito.has(p.id));
+  const disponibles = productos.filter((p) => p.stock_disponible > 0 && !enCarrito.has(p.id) && !esMenu(p));
   if (!disponibles.length) return [];
 
   const hora = new Date(ahora).getHours();
@@ -1015,7 +1067,7 @@ const estadoInicial = () => ({
   catalogo: PRODUCTOS_INICIALES,
   productos: PRODUCTOS_INICIALES.map((p) => ({ ...p })),
   ubicaciones: UBICACIONES_INICIALES,
-  carrito: {}, // { [idProducto]: cantidad } · local de cada dispositivo
+  carrito: {}, // { [claveLinea]: { id, cantidad, opciones } } · local de cada dispositivo
   pedidos: [], // ← sincronizado con la colección `pedidos` de Firestore
   notificaciones: [], // avisos al pasajero cuando la tripulación marca SU pedido como listo
   aviso: null, // aviso global { texto, tono }
@@ -1029,20 +1081,35 @@ function reducer(state, action) {
     case 'CARRITO_MAS': {
       const p = state.productos.find((x) => x.id === action.id);
       if (!p) return state;
-      const actual = state.carrito[p.id] || 0;
-      if (actual >= p.stock_disponible) return state; // nunca más que el stock
-      return { ...state, carrito: { ...state.carrito, [p.id]: actual + 1 } };
+      const clave = action.lineKey || claveLinea(p.id, action.opciones || []);
+      const existente = state.carrito[clave];
+      const opciones = action.opciones || existente?.opciones || [];
+      if (esMenu(p) && opciones.length !== MENUS[p.id].length) return state; // el menú debe estar completo
+      const enCarrito = Object.values(state.carrito)
+        .filter((l) => l.id === p.id)
+        .reduce((n, l) => n + l.cantidad, 0);
+      if (enCarrito >= p.stock_disponible) return state; // nunca más que el stock
+      return {
+        ...state,
+        carrito: {
+          ...state.carrito,
+          [clave]: { id: p.id, cantidad: (existente?.cantidad || 0) + 1, opciones },
+        },
+      };
     }
     case 'CARRITO_MENOS': {
-      const actual = state.carrito[action.id] || 0;
+      const clave = action.lineKey || String(action.id);
+      const actual = state.carrito[clave];
+      if (!actual) return state;
       const carrito = { ...state.carrito };
-      if (actual <= 1) delete carrito[action.id];
-      else carrito[action.id] = actual - 1;
+      if (actual.cantidad <= 1) delete carrito[clave];
+      else carrito[clave] = { ...actual, cantidad: actual.cantidad - 1 };
       return { ...state, carrito };
     }
     case 'CARRITO_QUITAR': {
+      const clave = action.lineKey || String(action.id);
       const carrito = { ...state.carrito };
-      delete carrito[action.id];
+      delete carrito[clave];
       return { ...state, carrito };
     }
     case 'CARRITO_VACIAR':
@@ -1052,14 +1119,24 @@ function reducer(state, action) {
       let carrito = state.carrito;
       let aviso = state.aviso;
       if (action.ajustar !== false) {
-        // Si otro pasajero se ha llevado las últimas unidades, el carrito baja a lo que realmente queda
+        // Si otro pasajero se ha llevado las últimas unidades, el carrito baja a lo que realmente queda.
+        // El stock se descuenta por producto, no por línea: un menú puede repetirse con distintas opciones.
         const ajustado = {};
+        const restante = new Map(productos.map((p) => [p.id, p.stock_disponible]));
         let cambio = false;
-        Object.entries(carrito).forEach(([id, cant]) => {
-          const prod = productos.find((x) => x.id === Number(id));
-          const n = Math.min(cant, prod ? prod.stock_disponible : 0);
-          if (n !== cant) cambio = true;
-          if (n > 0) ajustado[id] = n;
+        Object.entries(carrito).forEach(([clave, linea]) => {
+          const prod = productos.find((x) => x.id === linea.id);
+          if (!prod) {
+            cambio = true;
+            return;
+          }
+          const disponible = restante.get(prod.id) || 0;
+          const n = Math.min(linea.cantidad, disponible);
+          if (n !== linea.cantidad) cambio = true;
+          if (n > 0) {
+            ajustado[clave] = { ...linea, cantidad: n };
+            restante.set(prod.id, disponible - n);
+          }
         });
         if (cambio) {
           carrito = ajustado;
@@ -1182,9 +1259,18 @@ function StoreProvider({ children }) {
     async confirmarPedido({ ubicacionId, metodoPago }) {
       const s = stateRef.current;
       const items = Object.entries(s.carrito)
-        .map(([id, cantidad]) => {
-          const p = s.productos.find((x) => x.id === Number(id));
-          return p ? { id: p.id, nombre: p.nombre, precio: p.precio, cantidad, stock: p.stock_disponible } : null;
+        .map(([, linea]) => {
+          const p = s.productos.find((x) => x.id === linea.id);
+          return p
+            ? {
+                id: p.id,
+                nombre: p.nombre,
+                precio: p.precio,
+                cantidad: linea.cantidad,
+                stock: p.stock_disponible,
+                opciones: linea.opciones || [],
+              }
+            : null;
         })
         .filter((i) => i && i.cantidad > 0);
       if (!items.length) {
@@ -1193,7 +1279,9 @@ function StoreProvider({ children }) {
           clave: 'Tu carrito se ha quedado vacío. Revisa tu pedido.',
         });
       }
-      const agotado = items.find((i) => i.cantidad > i.stock); // otro dispositivo pudo llevarse las últimas unidades
+      // El stock se valida sumando todas las líneas del mismo producto (mismo menú con opciones distintas).
+      const pedidoPorProducto = items.reduce((m, i) => ({ ...m, [i.id]: (m[i.id] || 0) + i.cantidad }), {});
+      const agotado = items.find((i) => pedidoPorProducto[i.id] > i.stock); // otro dispositivo pudo llevarse las últimas unidades
       if (agotado) {
         throw Object.assign(
           new Error(`Lo sentimos, «${agotado.nombre}» se ha agotado mientras pedías. Revisa tu carrito.`),
@@ -1736,14 +1824,31 @@ function MapaBuque({ ubicaciones, esperas, masRapida, seleccion, onSelect }) {
 /* -------------------------------------------------------------------
    6. VISTA A — APP DEL PASAJERO
    ------------------------------------------------------------------- */
-function ProductoCard({ p, cantidad, onAdd, onDec }) {
+function ProductoCard({ p, productos, cantidad, onAdd, onDec }) {
   const { t, eur, idioma } = useI18n();
+  const grupos = MENUS[p.id] || null;
+  const [abierto, setAbierto] = useState(false);
+  const [seleccion, setSeleccion] = useState({});
   const agotado = p.stock_disponible <= 0;
   const pocas = !agotado && p.stock_disponible <= 5;
   const enMaximo = cantidad >= p.stock_disponible;
   const nombre = nombreProducto(p, idioma);
+  const opciones = grupos
+    ? grupos
+        .map((g) => {
+          const elegido = productos.find((x) => x.id === seleccion[g.clave] && x.stock_disponible > 0);
+          return elegido ? { grupo: g.clave, id: elegido.id, nombre: elegido.nombre } : null;
+        })
+        .filter(Boolean)
+    : [];
+  const completo = !grupos || opciones.length === grupos.length;
+  const sinOpciones = grupos ? grupos.some((g) => !productos.some((x) => g.categorias.includes(x.categoria) && x.stock_disponible > 0)) : false;
+
   return (
-    <article className="relative rounded-card border border-fo-line bg-white p-3 shadow-[1px_2px_4px_0_rgba(187,187,187,0.5)]">
+    <article
+      className="relative rounded-card border border-fo-line bg-white p-3 shadow-[1px_2px_4px_0_rgba(187,187,187,0.5)]"
+      data-menu={grupos ? p.id : undefined}
+    >
       {agotado ? (
         <span className="absolute right-3 top-3 z-10">
           <Pill tone="grey">{t('Agotado')}</Pill>
@@ -1761,12 +1866,29 @@ function ProductoCard({ p, cantidad, onAdd, onDec }) {
           <h3 className={`text-base font-semibold leading-tight text-fo-blue ${agotado || pocas ? 'pr-20' : ''}`}>{nombre}</h3>
           <div className="mt-2.5 flex items-center justify-between gap-2">
             <span className="text-lg font-bold text-fo-blue">{eur(p.precio)}</span>
-            {cantidad > 0 ? (
-              <Stepper cantidad={cantidad} onDec={onDec} onInc={onAdd} incDisabled={enMaximo} />
+            {grupos ? (
+              <div className="flex min-w-0 items-center justify-end gap-1.5">
+                {cantidad > 0 ? <Pill tone="cream">{t('{n} en tu pedido', { n: cantidad })}</Pill> : null}
+                <Btn
+                  size="xs"
+                  variant="outlineBlue"
+                  onClick={() => setAbierto((v) => !v)}
+                  disabled={agotado}
+                  aria-expanded={abierto}
+                  aria-controls={`menu-${p.id}`}
+                  className="w-fit shrink-0"
+                  data-btn="menu"
+                >
+                  {abierto ? t('Cerrar opciones') : t('Elegir opciones')}
+                  <ChevronDown size={14} className={`transition-transform ${abierto ? 'rotate-180' : ''}`} />
+                </Btn>
+              </div>
+            ) : cantidad > 0 ? (
+              <Stepper cantidad={cantidad} onDec={onDec} onInc={() => onAdd()} incDisabled={enMaximo} />
             ) : (
               <Btn
                 size="xs"
-                onClick={onAdd}
+                onClick={() => onAdd()}
                 disabled={agotado}
                 aria-label={t('Añadir {nombre} al carrito', { nombre })}
                 className="w-fit shrink-0"
@@ -1778,6 +1900,57 @@ function ProductoCard({ p, cantidad, onAdd, onDec }) {
           </div>
         </div>
       </div>
+
+      {grupos && abierto ? (
+        <div id={`menu-${p.id}`} className="mt-3 border-t border-fo-line pt-3" data-menu-panel={p.id}>
+          <p className="text-[13px] font-bold text-fo-blue">{t('Personaliza tu menú')}</p>
+          <div className="mt-2 space-y-2.5">
+            {grupos.map((g) => {
+              const disponibles = productos.filter((x) => g.categorias.includes(x.categoria) && x.stock_disponible > 0);
+              return (
+                <label key={g.clave} className="block">
+                  <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-fo-grey">{t(g.etiqueta)}</span>
+                  <span className="relative block">
+                    <select
+                      value={seleccion[g.clave] || ''}
+                      onChange={(e) => setSeleccion((s) => ({ ...s, [g.clave]: Number(e.target.value) || '' }))}
+                      data-select={g.clave}
+                      className="w-full appearance-none rounded-btn border border-[#E3E3E3] bg-white px-3 py-2.5 pr-9 text-[14px] font-semibold text-fo-blue focus:border-fo-blue focus:outline-none focus:ring-2 focus:ring-fo-blue/30"
+                    >
+                      <option value="">{t('Selecciona una opción')}</option>
+                      {disponibles.map((o) => (
+                        <option key={o.id} value={o.id}>
+                          {nombreProducto(o, idioma)}
+                          {o.stock_disponible <= 5 ? ` · ${t('Últimas {n}', { n: o.stock_disponible })}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-fo-blue" />
+                  </span>
+                  {disponibles.length === 0 ? <span className="mt-1 block text-[11px] font-semibold text-fo-red">{t('Sin opciones disponibles')}</span> : null}
+                </label>
+              );
+            })}
+          </div>
+          <Btn
+            className="mt-3 w-full"
+            size="sm"
+            disabled={!completo || agotado || sinOpciones || enMaximo}
+            onClick={() => {
+              onAdd(opciones);
+              setAbierto(false);
+            }}
+            data-btn="menu-add"
+          >
+            <Plus size={15} strokeWidth={2.5} /> {t('Añadir menú')} · {eur(p.precio)}
+          </Btn>
+          {!completo ? (
+            <p className="mt-1.5 text-center text-[11px] text-fo-grey">
+              {sinOpciones ? t('Sin opciones disponibles') : t('Completa las opciones para añadirlo')}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
     </article>
   );
 }
@@ -1947,7 +2120,13 @@ function AppPasajero({ visible, demo = false }) {
   }, []);
 
   const lineas = useMemo(
-    () => productos.filter((p) => carrito[p.id] > 0).map((p) => ({ ...p, cantidad: carrito[p.id] })),
+    () =>
+      Object.entries(carrito)
+        .map(([lineKey, linea]) => {
+          const p = productos.find((x) => x.id === linea.id);
+          return p ? { ...p, lineKey, cantidad: linea.cantidad, opciones: linea.opciones || [] } : null;
+        })
+        .filter(Boolean),
     [productos, carrito]
   );
   const totalItems = lineas.reduce((s, l) => s + l.cantidad, 0);
@@ -2166,9 +2345,10 @@ function AppPasajero({ visible, demo = false }) {
                       <ProductoCard
                         key={p.id}
                         p={p}
-                        cantidad={carrito[p.id] || 0}
-                        onAdd={() => dispatch({ type: 'CARRITO_MAS', id: p.id })}
-                        onDec={() => dispatch({ type: 'CARRITO_MENOS', id: p.id })}
+                        productos={productos}
+                        cantidad={lineas.filter((l) => l.id === p.id).reduce((n, l) => n + l.cantidad, 0)}
+                        onAdd={(opciones) => dispatch({ type: 'CARRITO_MAS', id: p.id, opciones })}
+                        onDec={() => dispatch({ type: 'CARRITO_MENOS', lineKey: String(p.id) })}
                       />
                     ))}
                 </div>
@@ -2239,37 +2419,45 @@ function AppPasajero({ visible, demo = false }) {
             ) : (
               <>
                 <ul className="divide-y divide-fo-line">
-                  {lineas.map((l) => (
-                    <li key={l.id} className="flex items-start gap-3 py-3">
-                      <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-[#F7F7F7] text-fo-blue">
-                        <ImagenProducto producto={l} size={22} />
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="text-[15px] font-semibold leading-tight text-fo-blue">{nombreProducto(l, idioma)}</p>
-                          <button
-                            type="button"
-                            onClick={() => dispatch({ type: 'CARRITO_QUITAR', id: l.id })}
-                            aria-label={t('Quitar {nombre}', { nombre: nombreProducto(l, idioma) })}
-                            className="-mr-1 -mt-1.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-fo-red transition hover:bg-fo-red/10"
-                          >
-                            <Trash2 size={17} />
-                          </button>
+                  {lineas.map((l) => {
+                    const enCarrito = lineas.filter((x) => x.id === l.id).reduce((n, x) => n + x.cantidad, 0);
+                    return (
+                      <li key={l.lineKey} className="flex items-start gap-3 py-3">
+                        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-[#F7F7F7] text-fo-blue">
+                          <ImagenProducto producto={l} size={22} />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="text-[15px] font-semibold leading-tight text-fo-blue">{nombreProducto(l, idioma)}</p>
+                              {l.opciones.length ? (
+                                <p className="mt-0.5 text-[12px] leading-snug text-fo-grey">{textoOpciones(l.opciones, idioma)}</p>
+                              ) : null}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => dispatch({ type: 'CARRITO_QUITAR', lineKey: l.lineKey })}
+                              aria-label={t('Quitar {nombre}', { nombre: nombreProducto(l, idioma) })}
+                              className="-mr-1 -mt-1.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-fo-red transition hover:bg-fo-red/10"
+                            >
+                              <Trash2 size={17} />
+                            </button>
+                          </div>
+                          <div className="mt-1.5 flex items-center justify-between gap-2">
+                            <p className="text-[13px] text-fo-grey">
+                              {eur(l.precio)} × {l.cantidad} = <b className="text-fo-blue">{eur(l.precio * l.cantidad)}</b>
+                            </p>
+                            <Stepper
+                              cantidad={l.cantidad}
+                              onDec={() => dispatch({ type: 'CARRITO_MENOS', lineKey: l.lineKey })}
+                              onInc={() => dispatch({ type: 'CARRITO_MAS', id: l.id, lineKey: l.lineKey, opciones: l.opciones })}
+                              incDisabled={enCarrito >= l.stock_disponible}
+                            />
+                          </div>
                         </div>
-                        <div className="mt-1.5 flex items-center justify-between gap-2">
-                          <p className="text-[13px] text-fo-grey">
-                            {eur(l.precio)} × {l.cantidad} = <b className="text-fo-blue">{eur(l.precio * l.cantidad)}</b>
-                          </p>
-                          <Stepper
-                            cantidad={l.cantidad}
-                            onDec={() => dispatch({ type: 'CARRITO_MENOS', id: l.id })}
-                            onInc={() => dispatch({ type: 'CARRITO_MAS', id: l.id })}
-                            incDisabled={l.cantidad >= l.stock_disponible}
-                          />
-                        </div>
-                      </div>
-                    </li>
-                  ))}
+                      </li>
+                    );
+                  })}
                 </ul>
                 <div className="mt-2 flex items-start gap-2 rounded-lg bg-fo-cream p-3 text-[13px] font-semibold text-fo-blue">
                   <Info size={16} className="mt-0.5 shrink-0" />
@@ -2401,11 +2589,12 @@ function AppPasajero({ visible, demo = false }) {
                 </h3>
                 <ul className="divide-y divide-fo-line">
                   {lineas.map((l) => (
-                    <li key={l.id} className="flex justify-between gap-3 py-2 text-sm">
-                      <span>
+                    <li key={l.lineKey} className="flex justify-between gap-3 py-2 text-sm">
+                      <span className="min-w-0">
                         {l.cantidad}× {nombreProducto(l, idioma)}
+                        {l.opciones.length ? <span className="mt-0.5 block text-[12px] text-fo-grey">{textoOpciones(l.opciones, idioma)}</span> : null}
                       </span>
-                      <span className="font-semibold text-fo-blue">{eur(l.cantidad * l.precio)}</span>
+                      <span className="shrink-0 font-semibold text-fo-blue">{eur(l.cantidad * l.precio)}</span>
                     </li>
                   ))}
                 </ul>
@@ -2530,12 +2719,13 @@ function AppPasajero({ visible, demo = false }) {
                       <div className="rounded-card bg-white p-4">
                         <h3 className="mb-2 font-bold text-fo-blue">{t('Resumen')}</h3>
                         <ul className="divide-y divide-fo-line text-sm">
-                          {pedidoSeg.items.map((i) => (
-                            <li key={i.id} className="flex justify-between py-1.5">
-                              <span>
+                          {pedidoSeg.items.map((i, idx) => (
+                            <li key={`${i.id}-${idx}`} className="flex justify-between gap-3 py-1.5">
+                              <span className="min-w-0">
                                 {i.cantidad}× {nombreItem(i, idioma)}
+                                {i.opciones?.length ? <span className="mt-0.5 block text-[12px] text-fo-grey">{textoOpciones(i.opciones, idioma)}</span> : null}
                               </span>
-                              <span className="font-semibold text-fo-blue">{eur(i.cantidad * i.precio)}</span>
+                              <span className="shrink-0 font-semibold text-fo-blue">{eur(i.cantidad * i.precio)}</span>
                             </li>
                           ))}
                         </ul>
@@ -2689,10 +2879,19 @@ function TarjetaPedido({ pedido, ubicacion, columna, ahora, onAvanzar }) {
         <span className="text-xs text-fo-grey">{t('Pago: {metodo}', { metodo: nombreMetodoGuardado(pedido.metodoPago, idioma) })}</span>
       </div>
       <ul className="mt-3 space-y-1.5 border-t border-fo-line pt-3 text-lg">
-        {pedido.items.map((i) => (
-          <li key={i.id} className="flex gap-2">
+        {pedido.items.map((i, idx) => (
+          <li key={`${i.id}-${idx}`} className="flex gap-2">
             <b className="w-9 shrink-0 text-fo-blue">{i.cantidad}×</b>
-            <span>{nombreItem(i, idioma)}</span>
+            <div className="min-w-0">
+              <span>{nombreItem(i, idioma)}</span>
+              {i.opciones?.length ? (
+                <ul className="mt-0.5 space-y-0.5 text-[13px] leading-snug text-fo-grey">
+                  {i.opciones.map((o) => (
+                    <li key={`${o.grupo}-${o.id}`}>· {nombreItem(o, idioma)}</li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
           </li>
         ))}
       </ul>
@@ -2974,7 +3173,7 @@ function Contenido() {
 
 function App() {
   return (
-    <I18nProvider>
+    <I18nProvider idiomaForzado={MODO_ADMIN ? 'es' : undefined}>
       <StoreProvider>
         <Contenido />
       </StoreProvider>
