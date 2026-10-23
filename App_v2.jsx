@@ -182,7 +182,6 @@ const CATALOGO_CSV = `id,nombre,precio,categoria,imagen_url,stock_disponible
 37,Fruta Fresca Km 0 (Plátano de Canarias / Manzana),1.6,Snacks,lucide:apple,50
 38,Oferta Bocadillo + Refresco o Cerveza,7.8,Ofertas,lucide:sparkles,50
 39,Oferta Sándwich + Agua o Refresco,7.5,Ofertas,lucide:sparkles,50
-40,Menú Web+ Canjeable (Principal + Bebida + Snack),8.9,Ofertas,lucide:award,60
 `;
 
 // Parser CSV mínimo: soporta campos entre comillas con comas dentro (p. ej. "Cerveza ... 0,0").
@@ -228,7 +227,7 @@ function cargarCatalogo(csv) {
 // Los productos perecederos duran poco; el resto se queda en una semana.
 const CADUCIDAD_MOCK_HORAS = {
   2: 3, 4: 2, 5: 4, 6: 5, 9: 3, 10: 5, 11: 2, 12: 6, 13: 4, 14: 3, 15: 5,
-  20: 4, 21: 3, 22: 2, 23: 5, 24: 6, 36: 1, 37: 7, 38: 3, 39: 4, 40: 6,
+  20: 4, 21: 3, 22: 2, 23: 5, 24: 6, 36: 1, 37: 7, 38: 3, 39: 4,
 };
 const HORAS_CADUCIDAD_POR_DEFECTO = 168;
 const conCaducidadMock = (productos) => {
@@ -241,7 +240,7 @@ const conCaducidadMock = (productos) => {
 
 const PRODUCTOS_INICIALES = conCaducidadMock(cargarCatalogo(CATALOGO_CSV));
 
-// Traducción de los 40 productos del catálogo (la clave es el id del CSV).
+// Traducción de los productos del catálogo (la clave es el id del CSV).
 const NOMBRES_EN = {
   1: 'Still Water 50cl',
   2: 'Gourmet Chicken Baguette',
@@ -282,7 +281,6 @@ const NOMBRES_EN = {
   37: 'Fresh Km 0 Fruit (Canary Banana / Apple)',
   38: 'Baguette + Soft Drink or Beer Deal',
   39: 'Sandwich + Water or Soft Drink Deal',
-  40: 'Web+ Menu (Main + Drink + Snack)',
 };
 const CATEGORIAS_EN = {
   'Ofertas': 'Deals',
@@ -343,11 +341,6 @@ const MENUS = {
     { clave: 'sandwich', etiqueta: 'Elige sándwich', categorias: ['Sandwiches'] },
     { clave: 'bebida', etiqueta: 'Elige agua o refresco', categorias: ['Aguas', 'Refrescos Cola'] },
   ],
-  40: [
-    { clave: 'principal', etiqueta: 'Elige principal', categorias: ['Bocadillos', 'Sandwiches', 'Croissants', 'Bolleria'] },
-    { clave: 'bebida', etiqueta: 'Elige bebida', categorias: ['Aguas', 'Refrescos Cola', 'Cervezas', 'Cafés'] },
-    { clave: 'snack', etiqueta: 'Elige snack', categorias: ['Snacks'] },
-  ],
 };
 const esMenu = (p) => Boolean(MENUS[p.id]);
 const claveLinea = (id, opciones = []) =>
@@ -405,8 +398,8 @@ const INFO_ESTADO = {
 
 /* Reglas de negocio ------------------------------------------------- */
 // Modelo determinista de colas: espera = pedidos en cola × MIN_POR_PEDIDO + BASE_RECOGIDA_MIN
-// Escalado a la demo de 25 pasajeros: 5 pedidos ≈ 5 min, 10 ≈ 7 min, 25 ≈ 15 min (nivel alto).
-const MIN_POR_PEDIDO = 0.5; // incremento de espera por pedido concurrente (min)
+// Demo de ~10 usuarios: 5 pedidos ≈ 6 min, 10 ≈ 10 min, 25 ≈ 22 min (nivel alto).
+const MIN_POR_PEDIDO = 0.8; // incremento de espera por pedido concurrente (min)
 const BASE_RECOGIDA_MIN = 2; // trayecto + recogida (min), constante
 const REFRESCO_ESPERAS_MS = 60 * 1000; // las esperas se recalculan y refrescan cada 60 s
 
@@ -532,9 +525,6 @@ const TEXTOS_EN = {
   'Elige refresco o cerveza': 'Choose a soft drink or beer',
   'Elige sándwich': 'Choose a sandwich',
   'Elige agua o refresco': 'Choose water or a soft drink',
-  'Elige principal': 'Choose a main',
-  'Elige bebida': 'Choose a drink',
-  'Elige snack': 'Choose a snack',
   '{n} en tu pedido': '{n} in your order',
   'Quitar {nombre} del carrito': 'Remove {nombre} from cart',
   'Completa tu menú': 'Complete your meal',
@@ -750,6 +740,33 @@ const pedidosEnColaDe = (ubId, pedidos) =>
 // Se redondea hacia arriba para no prometer nunca menos tiempo del real; el color del chip usa ese mismo valor.
 const calcularEspera = (pedidos) => Math.ceil(pedidos * MIN_POR_PEDIDO + BASE_RECOGIDA_MIN);
 const esperaDe = (ub, pedidos) => calcularEspera(pedidosEnColaDe(ub.id, pedidos));
+
+// Cola inteligente: los pedidos que no necesitan preparación reciben una ventaja breve
+// equivalente a 2 minutos de antigüedad. Pasado ese margen, el orden vuelve a ser FIFO.
+const CATEGORIAS_SIN_PREPARACION = ['Aguas', 'Refrescos Cola', 'Cervezas', 'Snacks', 'Croissants', 'Bolleria'];
+const BONUS_INSTANTANEO_MIN = 2;
+const categoriasPedido = (pedido, productos) => {
+  const cats = new Set();
+  pedido.items.forEach((item) => {
+    const p = productos.find((x) => x.id === item.id);
+    if (p) cats.add(p.categoria);
+    else if (item.categoria) cats.add(item.categoria);
+    (item.opciones || []).forEach((o) => {
+      const opcion = productos.find((x) => x.id === o.id);
+      if (opcion) cats.add(opcion.categoria);
+    });
+  });
+  return cats;
+};
+const esPedidoInstantaneo = (pedido, productos) => {
+  const cats = categoriasPedido(pedido, productos);
+  return cats.size > 0 && [...cats].every((c) => CATEGORIAS_SIN_PREPARACION.includes(c));
+};
+const prioridadCola = (pedido, ahora, productos) => {
+  const edadMin = Math.max(0, (ahora - pedido.creado) / 60000);
+  return edadMin + (esPedidoInstantaneo(pedido, productos) ? BONUS_INSTANTANEO_MIN : 0);
+};
+
 // Hook: fuerza el recálculo de las esperas en pantalla exactamente cada 60 s (y devuelve la hora de la última actualización)
 function useRefrescoEsperas(ms = REFRESCO_ESPERAS_MS) {
   const [refresco, setRefresco] = useState(() => ({ tick: 0, hora: Date.now() }));
@@ -1868,7 +1885,15 @@ function ProductoCard({ p, productos, cantidad, onAdd, onDec }) {
             <span className="text-lg font-bold text-fo-blue">{eur(p.precio)}</span>
             {grupos ? (
               <div className="flex min-w-0 items-center justify-end gap-1.5">
-                {cantidad > 0 ? <Pill tone="cream">{t('{n} en tu pedido', { n: cantidad })}</Pill> : null}
+                {cantidad > 0 ? (
+                  <span
+                    className="flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded-full bg-fo-blue px-1 text-[11px] font-bold text-white"
+                    aria-label={t('{n} en tu pedido', { n: cantidad })}
+                    title={t('{n} en tu pedido', { n: cantidad })}
+                  >
+                    {cantidad}
+                  </span>
+                ) : null}
                 <Btn
                   size="xs"
                   variant="outlineBlue"
@@ -2857,15 +2882,20 @@ function useAhora(ms) {
   return t;
 }
 
-function TarjetaPedido({ pedido, ubicacion, columna, ahora, onAvanzar }) {
+function TarjetaPedido({ pedido, ubicacion, columna, ahora, instantaneo, onAvanzar }) {
   const { t, eur, idioma, locale } = useI18n();
   const mins = Math.max(0, Math.floor((ahora - pedido.creado) / 60000));
   // Se marca en rojo cuando un pedido en preparación ya ha superado el tiempo base de un pedido
   const tarde = pedido.estado === 'preparando' && mins >= calcularEspera(1);
   const hora = new Date(pedido.creado).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
   const Flecha = columna.estado === 'listo' ? Check : ArrowRight;
+  const express = instantaneo && columna.estado === 'preparando';
   return (
-    <article className="fo-pop rounded-card border border-fo-line bg-white p-5 shadow-[0_4px_10px_0_rgba(0,0,0,0.11)]" aria-label={t('Pedido {numero}', { numero: numeroPedido(pedido.numero) })}>
+    <article
+      className="fo-pop rounded-card border border-fo-line bg-white p-5 shadow-[0_4px_10px_0_rgba(0,0,0,0.11)]"
+      aria-label={t('Pedido {numero}', { numero: numeroPedido(pedido.numero) })}
+      data-express={express ? 'si' : undefined}
+    >
       <div className="flex items-start justify-between gap-2">
         <h3 className="text-3xl font-bold leading-none text-fo-blue">{numeroPedido(pedido.numero)}</h3>
         <span className={`flex items-center gap-1 text-sm font-semibold ${tarde ? 'text-fo-red' : 'text-fo-grey'}`} data-tarde={tarde ? 'si' : undefined}>
@@ -2876,6 +2906,7 @@ function TarjetaPedido({ pedido, ubicacion, columna, ahora, onAvanzar }) {
         <Pill tone={TONO_ETIQUETA_UBICACION[ubicacion.id] || 'blue'}>
           <MapPin size={12} /> {nombreUbicacion(ubicacion, idioma)}
         </Pill>
+        {express ? <Pill tone="yellow">Express</Pill> : null}
         <span className="text-xs text-fo-grey">{t('Pago: {metodo}', { metodo: nombreMetodoGuardado(pedido.metodoPago, idioma) })}</span>
       </div>
       <ul className="mt-3 space-y-1.5 border-t border-fo-line pt-3 text-lg">
@@ -2991,9 +3022,7 @@ function PanelTripulacion() {
   const activos = pedidos.filter((p) => p.estado !== 'entregado');
   const entregados = pedidos.length - activos.length;
   const alertasStock = productos.filter((p) => p.stock_disponible <= 5).length;
-  const visibles = activos
-    .filter((p) => filtro === 'todas' || p.ubicacionId === filtro)
-    .sort((a, b) => a.creado - b.creado);
+  const visibles = activos.filter((p) => filtro === 'todas' || p.ubicacionId === filtro);
 
   return (
     <div className="relative flex h-full flex-col bg-fo-ice">
@@ -3064,7 +3093,15 @@ function PanelTripulacion() {
 
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto p-5 md:grid-cols-2 md:overflow-hidden">
         {COLUMNAS.map((col) => {
-          const pedidosCol = visibles.filter((p) => p.estado === col.estado);
+          const pedidosCol = visibles
+            .filter((p) => p.estado === col.estado)
+            .sort((a, b) =>
+              col.estado === 'preparando'
+                ? prioridadCola(b, ahora, productos) - prioridadCola(a, ahora, productos) ||
+                  a.creado - b.creado ||
+                  a.numero - b.numero
+                : a.creado - b.creado || a.numero - b.numero
+            );
           const Ico = col.icono;
           return (
             <section key={col.estado} className="flex min-h-[200px] flex-col overflow-hidden rounded-card border border-fo-line bg-white/70" aria-label={t(col.titulo)}>
@@ -3090,6 +3127,7 @@ function PanelTripulacion() {
                       ubicacion={ubicaciones.find((u) => u.id === p.ubicacionId)}
                       columna={col}
                       ahora={ahora}
+                      instantaneo={esPedidoInstantaneo(p, productos)}
                       onAvanzar={() => dispatch({ type: 'AVANZAR_PEDIDO', numero: p.numero, desde: col.estado })}
                     />
                   ))

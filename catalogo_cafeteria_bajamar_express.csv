@@ -38,4 +38,3 @@ id,nombre,precio,categoria,imagen_url,stock_disponible
 37,Fruta Fresca Km 0 (Plátano de Canarias / Manzana),1.6,Snacks,lucide:apple,50
 38,Oferta Bocadillo + Refresco o Cerveza,7.8,Ofertas,lucide:sparkles,50
 39,Oferta Sándwich + Agua o Refresco,7.5,Ofertas,lucide:sparkles,50
-40,Menú Web+ Canjeable (Principal + Bebida + Snack),8.9,Ofertas,lucide:award,60
